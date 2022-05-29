@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+    <include file="$(find new_proj)/launch/ur5.launch" />
+    <include file="$(find new_proj)/launch/moveit.launch" />
+    <include file="$(find new_proj)/launch/realsense.launch" />
+</launch>

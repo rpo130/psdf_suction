@@ -1,0 +1,4 @@
+<launch>
+    <node pkg="new_proj" type="environment_sim" name="environment_sim.py"/>
+    <node pkg="new_proj" type="main" name="main.py"/>
+</launch>

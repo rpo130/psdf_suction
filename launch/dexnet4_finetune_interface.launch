@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+    <include file="$(find gqcnn)/launch/grasp_planning_service.launch">
+        <arg name="model_name" value="gqcnn_finetune"/>
+        <arg name="model_dir" value="$(find gqcnn)/models/"/>
+    </include>
+</launch>

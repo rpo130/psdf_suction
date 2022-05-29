@@ -1,0 +1,6 @@
+.idea
+.vscode
+experiment
+vis
+test
+*.pyc

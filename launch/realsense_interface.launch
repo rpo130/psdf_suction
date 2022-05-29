@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="psdf" type="realsense_node.py" name="realsense_node"/>
+</launch>
