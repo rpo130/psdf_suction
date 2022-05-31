@@ -2,8 +2,6 @@ import os
 
 import numpy as np
 import torch
-import math
-
 try:
     import pycuda.driver as cuda
     import pycuda.autoinit
@@ -50,7 +48,7 @@ class VacuumGripper(object):
         self.natural_flexion = np.linalg.norm(self.vertices[:, 0] - self.vertices[:, 2])
 
         # Cuda kernel function (C++)
-        c_file = open(os.path.join(os.path.dirname(__file__), "vacuum_gripper_gpu_c.cpp"), 'r')
+        c_file = open(os.path.join(os.path.dirname(__file__), "vacuum_gripper.cpp"), 'r')
         c_string = c_file.read()
         self._cuda_src_mod = SourceModule(c_string)
 

@@ -14,7 +14,7 @@ import torch
 import cv2
 import time
 
-from scripts.sdf.psdf_s import PSDFs as PSDF
+from scripts.psdf import PSDF
 from scripts.utils import compute_surface_normal_torch
 
 

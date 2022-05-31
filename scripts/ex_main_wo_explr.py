@@ -18,7 +18,7 @@ from scripts.vaccum_cup import VaccumCup
 from scripts.ur5_commander import UR5Commander
 from scripts.psdf_commander import PSDFCommander
 from scripts.recorder import Recorder
-from scripts.analysis.vacuum_gripper_gpu import VacuumGripper
+from scripts.analysis.vacuum_gripper import VacuumGripper
 
 method_name = "main_wo_explr"
 
