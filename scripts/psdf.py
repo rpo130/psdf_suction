@@ -36,7 +36,7 @@ class PSDF:
         points_ = torch.cat([points, torch.ones_like(points[:, [0]])], dim=-1)
         return (points_ @ pose.T)[..., :3]
 
-    def psdf_integrate(self, depth, intrinsic, camera_pose, color=None, method='dynamic', beta=5):
+    def fuse(self, depth, intrinsic, camera_pose, color=None, method='dynamic', beta=5):
         """
 
         :param depth:
