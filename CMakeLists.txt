@@ -65,10 +65,11 @@ find_package(Boost REQUIRED system filesystem) #  date_time thread
 #    FILES
 #)
 
-## Generate services in the 'srv' folder
-#add_service_files(
-#  FILES
-#)
+# Generate services in the 'srv' folder
+add_service_files(
+  FILES
+  
+)
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -79,12 +80,12 @@ find_package(Boost REQUIRED system filesystem) #  date_time thread
 
 ## Generate added messages and services with any dependencies listed here
 
-#generate_messages(
-#  DEPENDENCIES
-#  std_msgs
-#  sensor_msgs
-#  geometry_msgs
-#)
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  sensor_msgs
+  geometry_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##

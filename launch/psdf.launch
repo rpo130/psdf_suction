@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="psdf_suction" type="psdf_psdf.py" name="psdf" ns="psdf_suction">
+        <param name="show_point_clout" type="bool">
+    </node>
+</launch>

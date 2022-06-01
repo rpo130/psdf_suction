@@ -14,7 +14,7 @@ import torch
 import rospy
 import rosparam
 
-from scripts.config import config
+from scripts.configs import config
 from scripts.utils import *
 from scripts.vaccum_cup import VaccumCup
 from scripts.ur5_commander import UR5Commander

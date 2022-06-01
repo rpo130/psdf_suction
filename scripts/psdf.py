@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import math
 
 
 class PSDF:
@@ -14,26 +13,28 @@ class PSDF:
         self.range = range
         self.shape = np.ceil((self.range[:, 1]-self.range[:, 0])/self.resolution).astype(np.int)
         self.range[:, 1] = self.range[:, 0] + self.shape * self.resolution
-        print("volume shape:", self.shape, "range:", self.range)
 
         # initialization
         I, J, K = torch.meshgrid(torch.arange(self.shape[0], device=device),
                                  torch.arange(self.shape[1], device=device),
                                  torch.arange(self.shape[2], device=device))
         self.indices = torch.stack([I, J, K], dim=-1)
-        self.positions = (torch.from_numpy(self.indices).float().to(device) + 0.5) * self.resolution \
-                         + torch.from_numpy(self.range[:, 0].reshape(1, 3)).to(device)
+        self.positions = (self.indices.float() + 0.5) * self.resolution \
+                         + torch.from_numpy(self.range[:, 0].reshape(1, 3)).float().to(device)
         self.sdf = torch.ones(self.shape.tolist(), dtype=torch.float32, device=device)
         self.var = torch.ones(self.shape.tolist(), dtype=torch.float32, device=device) * 1e-3
         if with_color:
-            self.rgb = torch.zeros_like(self.shape.tolist()+[3], dtype=torch.uint8, device=device)
+            self.rgb = torch.zeros(self.shape.tolist()+[3], dtype=torch.uint8, device=device)
+            
+        print("volume shape:", self.shape)
+        print("volume range:\n", self.range)
 
     def camera2pixel(self, points, intrinsic):
         uv_ = torch.round((points / points[..., 2:3]) @ intrinsic.T)
         return uv_[..., :2].long()
 
     def rigid_transform(self, points, pose):
-        points_ = torch.cat([points, torch.ones_like(points[:, [0]])], dim=-1)
+        points_ = torch.cat([points, torch.ones_like(points[..., [0]])], dim=-1)
         return (points_ @ pose.T)[..., :3]
 
     def fuse(self, depth, intrinsic, camera_pose, color=None, method='dynamic', beta=5):
@@ -83,10 +84,10 @@ class PSDF:
         x, y, z = x[dist_filter], y[dist_filter], z[dist_filter]
         distance = distance[dist_filter]
         surface_depth = surface_depth[dist_filter]
-        if self.with_color and color is not None:
-            rgb_new = surface_color[dist_filter]
         sdf_new = torch.clamp_max(distance/self.truncate_margin, 1)
         var_new = self.axial_noise_model(surface_depth) ** 2
+        if self.with_color and color is not None:
+            rgb_new = surface_color[dist_filter]
 
         # update volume
         var_old = self.var[x, y, z]
@@ -103,11 +104,11 @@ class PSDF:
                 var_c = sign * (torch.exp(alpha * diff) - 1) + (1 - sign) * lambd
                 self.var[x, y, z] += var_c
             if self.with_color and color is not None:
-                self.rgb[x, y, z] = p * self.rgb[x, y, z] + q * rgb_new
+                self.rgb[x, y, z] = (p[..., None] * self.rgb[x, y, z] + q[..., None] * rgb_new).type(torch.uint8)
         elif method == "average":
             self.sdf[x, y, z] = sdf_old + 1 / beta * (sdf_new - sdf_old)
             if self.with_color and color is not None:
-                self.rgb[x, y, z] = self.rgb[x, y, z] + 1 / beta * (rgb_new - self.rgb[x, y, z])
+                self.rgb[x, y, z] = (self.rgb[x, y, z] + 1 / beta * (rgb_new - self.rgb[x, y, z])).type(torch.uint8)
 
 
     def axial_noise_model(self, z):

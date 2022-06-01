@@ -4,7 +4,7 @@ import yaml
 
 import rosparam
 
-from scripts.config import config
+from scripts.configs import config
 from scripts.ur5_commander import UR5Commander
 
 if __name__ == '__main__':

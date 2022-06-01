@@ -13,13 +13,13 @@ sys.path.append('/opt/ros/melodic/lib/python2.7/dist-packages')
 import rospy
 import rosparam
 
-from scripts.config import config
+from scripts.configs import config
 from scripts.utils import get_orientation
 from scripts.vaccum_cup import VaccumCup
 from scripts.ur5_commander import UR5Commander
 from scripts.psdf_commander import PSDFCommander
 from scripts.recorder import Recorder
-from scripts.analysis.vacuum_gripper import VacuumGripper
+from scripts.analyser.vacuum_cup_analyser import VacuumGripper
 
 method_name = "main"
 

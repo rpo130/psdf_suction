@@ -28,7 +28,7 @@ class Holder(pycuda.driver.PointerHolderBase):
         return self.t.data_ptr()
 
 
-class VacuumGripper(object):
+class VacuumCupAnalyser(object):
     def __init__(self, radius=0.01, height=0.04, num_vertices=8, angle_threshold=np.pi / 4):
         """
         Construct a mass-spring model for vacuum gripper.
@@ -48,7 +48,7 @@ class VacuumGripper(object):
         self.natural_flexion = np.linalg.norm(self.vertices[:, 0] - self.vertices[:, 2])
 
         # Cuda kernel function (C++)
-        c_file = open(os.path.join(os.path.dirname(__file__), "vacuum_gripper.cpp"), 'r')
+        c_file = open(os.path.join(os.path.dirname(__file__), "vacuum_cup_analyser.cpp"), 'r')
         c_string = c_file.read()
         self._cuda_src_mod = SourceModule(c_string)
 
@@ -58,7 +58,7 @@ class VacuumGripper(object):
         self._grid_dim_x = 740
         self._n_gpu_loops = 0
 
-    def update_visiondict(self, vision_dict, obj_ids, half_patch=15, use_gpu=True):
+    def analyse(self, vision_dict, obj_ids, half_patch=15, use_gpu=True):
         gpu_mode = use_gpu and FUSION_GPU_MODE
         if gpu_mode:
             height, width, _ = vision_dict['point_cloud'].shape
