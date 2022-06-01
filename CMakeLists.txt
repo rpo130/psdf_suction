@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(psdf)
+project(psdf_suction)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -8,27 +8,26 @@ project(psdf)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-        interactive_markers
-        moveit_core
-        moveit_visual_tools
-        moveit_ros_planning
-        moveit_ros_planning_interface
-        moveit_ros_perception
-        pluginlib
-        geometric_shapes
-        pcl_ros
-        pcl_conversions
-        rosbag
-        tf2_ros
-        tf2_eigen
-        tf2_geometry_msgs
+        # interactive_markers
+        # moveit_core
+        # moveit_visual_tools
+        # moveit_ros_planning
+        # moveit_ros_planning_interface
+        # moveit_ros_perception
+        # pluginlib
+        # geometric_shapes
+        # pcl_ros
+        # pcl_conversions
+        # rosbag
+        # tf2_ros
+        # tf2_eigen
+        # tf2_geometry_msgs
         sensor_msgs
         geometry_msgs
         message_generation)
 
 ## System dependencies are found with CMake's conventions
-find_package(Eigen3 REQUIRED)
-find_package(Boost REQUIRED system filesystem) #  date_time thread 
+# find_package(Boost REQUIRED system filesystem) #  date_time thread 
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -120,16 +119,16 @@ catkin_package(
         LIBRARIES
         INCLUDE_DIRS
         CATKIN_DEPENDS
-        moveit_core
-        moveit_visual_tools
-        moveit_ros_planning_interface
-        interactive_markers
-        tf2_geometry_msgs
+        # moveit_core
+        # moveit_visual_tools
+        # moveit_ros_planning_interface
+        # interactive_markers
+        # tf2_geometry_msgs
         sensor_msgs
         geometry_msgs
         message_runtime
         DEPENDS
-        EIGEN3)
+)
 
 
 ###########

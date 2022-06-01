@@ -15,16 +15,45 @@
 * scikit-image
 
 # Installation
-- download code
+
+## 1.build dependencies
 ```bash
+# assuming ros-melodic is installed
+
+# realsense sdk https://github.com/IntelRealSense/librealsense/blob/master/doc/installation.md
+# realsense-ros
+
+
+# universal robot
+
+# moveit
+
+```
+
+## 2. build PSDF-Suction 
+```bash
+# make a new ros workspace
+mkdir -p ～/psdf_suction_ws/src
+cd ~/psdf_suction_ws/src
+
+# moveit_py3
+git clone https://github.com/tungkw/moveit_py3.git
+
+# PSDF Suction
 git clone https://github.com/tungkw/psdf_suction.git
+
+# build
+cd ..
+source ~/psdf_suction_dependency/devel/setup.bash
+catkin config --cmake-args -DPYTHON_EXECUTABLE=`which python3`
+catkin build
 ```
 
 # Quick start
 
-## run ros environment
+## 1. run ros dependencies
 ```bash
-source /path/to/catkin_ws/devel/setup.bash
+source ~/psdf_suction_ws/devel/setup.bash
 # UR5
 roslaunch ur_robot_driver ur5_bringup.launch robot_ip:='255.255.255.255'
 # moveit
@@ -35,7 +64,7 @@ roslaunch moveit_py3 moveit_py3.launch
 roslaunch realsense2_camera rs_aligned_depth.launch
 ```
 
-## run PSDF-Suction
+## 2. run PSDF-Suction
 ```bash
 cd /path/to/psdf_suction
 python3 scripts/ex_main.py
