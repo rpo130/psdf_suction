@@ -1,3 +1,0 @@
-float32[] previous_grasp_position
----
-geometry_msgs/Pose target_grasp_pose

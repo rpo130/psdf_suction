@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import os
 import numpy as np
 import json
 import torch
@@ -80,8 +81,10 @@ def get_point_cloud(psdf):
     return psdf.positions[torch.abs(psdf.sdf) <= 0.01]
 
 def main():
-    rospy.init_node("psdf_suction/psdf")
-    # show_point_cloud = rosparam.get_param("show_point_cloud")
+    rospy.init_node("psdf")
+    show_point_cloud = rosparam.get_param("/psdf_suction/psdf/show_point_cloud")
+    print(show_point_cloud)
+    print(type(show_point_cloud))
 
     # initialize PSDF
     range = np.array([
@@ -92,7 +95,7 @@ def main():
     psdf = PSDF(range, config.resolution, with_color=True)
 
     # load camera intrinsic and hand-eye-calibration
-    with open("config/cam_info_realsense.json", 'r') as f:
+    with open(os.path.join(os.path.dirname(__file__), "../config/cam_info_realsense.json"), 'r') as f:
         cam_info = json.load(f)
     cam_intr = np.array(cam_info["K"]).reshape(3, 3)
     cam_height = cam_info["height"]
@@ -104,7 +107,10 @@ def main():
     normal_map_pub = rospy.Publisher("psdf/normal_map", sensor_msgs.msg.Image, queue_size=1)
     variance_map_pub = rospy.Publisher("psdf/variance_map", sensor_msgs.msg.Image, queue_size=1)
     if show_point_cloud:
-        point_cloud_pub = rospy.Publisher("psdf/point_cloud", sensor_msgs.msg.PointCloud, queue_size=1)
+        point_cloud_pub = rospy.Publisher("/psdf_suction/psdf/point_cloud", sensor_msgs.msg.PointCloud, queue_size=1)
+        rospy.loginfo("PSDF output point cloud topic: /psdf_suction/psdf/point_cloud")
+        # depth_pub = rospy.Publisher("/psdf_suction/psdf/depth", sensor_msgs.msg.PointCloud, queue_size=1)
+        # rospy.loginfo("PSDF output depth topic: /psdf_suction/psdf/depth")
 
     # subscribe camera and robot pose
     # and fuse new data to PSDF
@@ -147,9 +153,10 @@ def main():
             )
         )
         if show_point_cloud:
-            point_cloud = get_point_cloud(psdf).cpu().numpy()
             point_cloud_msg = sensor_msgs.msg.PointCloud()
             point_cloud_msg.header.frame_id = "base_link"
+            # psdf
+            point_cloud = get_point_cloud(psdf).cpu().numpy()
             point_cloud_msg.points = []
             for point in point_cloud:
                 point_cloud_msg.points.append(geometry_msgs.msg.Point32(x=point[0], y=point[1], z=point[2]))
@@ -161,7 +168,7 @@ def main():
     sub_syn = message_filters.ApproximateTimeSynchronizer([depth_sub, color_sub, tool0_sub], 1e10, 1e-3, allow_headerless=True)
     sub_syn.registerCallback(fuse_cb)
 
-    print("PSDF running")
+    rospy.loginfo("PSDF running")
     rospy.spin()
 
 

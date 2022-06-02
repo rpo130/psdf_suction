@@ -1,5 +1,0 @@
-<?xml version="1.0"?>
-<launch>
-    <include file="$(find ur5_moveit_config)/launch/ur5_moveit_planning_execution.launch" />
-    <node pkg="psdf" type="ur5_node.py" name="ur5_node" output="screen"/>
-</launch>

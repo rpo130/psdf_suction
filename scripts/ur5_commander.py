@@ -1,15 +1,10 @@
-import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 import rospy
-import rosparam
 import geometry_msgs.msg
 
 import moveit_py3.srv
-
-
-config = rosparam.get_param
 
 
 class UR5Commander(object):

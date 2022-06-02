@@ -2,6 +2,9 @@ import os
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+DEVICE = "cuda:0"
+EPSILON = 1e-6
+
 class Config:
     def __init__(self):
         self.package_name = "psdf"
@@ -46,7 +49,8 @@ class Config:
         # print(np.linalg.det(T_cam2world[:3, :3]))
         T_cam2world[:3, 3] = mid_point
         T_cam2world[2, 3] = self.init_cam_height
-        T_cam2tool0 = np.loadtxt("config/camera_pose_base_tip.txt")
+        T_cam2tool0 = np.loadtxt(
+            os.path.join(os.path.dirname(__file__), "../config/camera_pose_base_tip.txt"))
         T_tool02world = T_cam2world @ np.linalg.inv(T_cam2tool0)
         self.init_position = T_tool02world[:3, 3]
         self.init_quaternion = R.from_matrix(T_tool02world[:3, :3]).as_quat()

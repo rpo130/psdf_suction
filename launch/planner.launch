@@ -1,0 +1,6 @@
+<launch>
+    <arg name="show_grasp_point" default="false" />
+    <node pkg="psdf_suction" type="node_planner.py" name="planner" ns="psdf_suction">
+        <param name="show_grasp_point" type="bool" value="$(arg show_grasp_point)" />
+    </node>
+</launch>

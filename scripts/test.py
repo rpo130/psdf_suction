@@ -10,6 +10,7 @@ def main():
         tool0_pose = geometry_msgs.msg.Pose()
         tool0_pose.orientation.w = 1
         tool0_pose_pub.publish(tool0_pose)
+        rospy.sleep(0.0001)
 
 if __name__=="__main__":
     main()

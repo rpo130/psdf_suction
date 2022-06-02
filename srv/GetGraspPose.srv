@@ -1,0 +1,5 @@
+float32[] previous_grasp_position
+sensor_msgs/Image mask
+---
+float32[] grasp_position
+float32[] grasp_normal

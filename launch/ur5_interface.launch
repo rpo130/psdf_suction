@@ -1,5 +1,0 @@
-<?xml version="1.0"?>
-<launch>
-    <include file="$(find ur5_interface)/launch/ur5.launch" />
-    <include file="$(find ur5_interface)/launch/moveit.launch" />
-</launch>

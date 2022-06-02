@@ -1,5 +1,6 @@
 <launch>
-    <node pkg="psdf_suction" type="psdf_psdf.py" name="psdf" ns="psdf_suction">
-        <param name="show_point_clout" type="bool">
+    <arg name="show_point_cloud" default="false" />
+    <node pkg="psdf_suction" type="node_psdf.py" name="psdf" ns="psdf_suction" output="screen" >
+        <param name="show_point_cloud" type="bool" value="$(arg show_point_cloud)" />
     </node>
 </launch>

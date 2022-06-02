@@ -4,6 +4,17 @@ from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 import geometry_msgs.msg
 import torch
 
+def get_orientation(origin_ori, normal):
+    z_axis = np.array([0.0, 0.0, 1.0])
+    rvec = np.cross(z_axis, normal)
+    if np.linalg.norm(rvec) == 0:
+        rvec = z_axis
+    else:
+        rvec = rvec / np.linalg.norm(rvec)
+    theta = np.arccos(np.dot(z_axis, normal))
+    mat = R.from_rotvec(rvec*theta).as_matrix()
+    r = mat @ R.from_quat(origin_ori).as_matrix()
+    return R.from_matrix(r).as_quat()
 
 def transform2matrix(transform):
     translation = transform.translation
