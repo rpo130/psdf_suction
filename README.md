@@ -1,7 +1,8 @@
 
 # Dependencies
-## [ROS melodic](http://wiki.ros.org/melodic)
-  - [moveit-melodic](http://docs.ros.org/en/melodic/api/moveit_tutorials/html/index.html)
+## CUDA 10.2
+## ROS [melodic](http://wiki.ros.org/melodic)
+  - [moveit1-melodic](http://docs.ros.org/en/melodic/api/moveit_tutorials/html/index.html)
   - [Universal_Robots_ROS_Driver](https://github.com/UniversalRobots/Universal_Robots_ROS_Driver)
   - [realsense-ros](https://github.com/IntelRealSense/realsense-ros#installation-instructions)
 
@@ -17,18 +18,23 @@
 # Installation
 
 ## 1.build dependencies
-```bash
-# assuming ros-melodic is installed
-
-# realsense sdk https://github.com/IntelRealSense/librealsense/blob/master/doc/installation.md
-# realsense-ros
-
-
-# universal robot
-
-# moveit
-
-```
+## 1.1 ROS
+- ROS-melodic
+- [moveit1-melodic](http://docs.ros.org/en/melodic/api/moveit_tutorials/html/doc/getting_started/getting_started.html#install-moveit)
+- [Universal Robot](https://github.com/UniversalRobots/Universal_Robots_ROS_Driver)
+- realsense
+  - [SDK v2.50](https://github.com/IntelRealSense/librealsense/blob/master/doc/distribution_linux.md) with librealsense2-dev
+  - download ROS package which is compatible with version of SDK, ubuntu and ROS
+## 1.2 Python
+- python2
+  ```bash
+  python2 -m pip install scipy
+  ```
+- python3
+  ```bash
+  python3 -m pip install torch==1.2.0 # compatible with cuda https://pytorch.org/get-started/previous-versions/
+  python3 -m pip install scikit-image pycuda scipy
+  ```
 
 ## 2. build PSDF-Suction 
 ```bash

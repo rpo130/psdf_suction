@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include "cuda_runtime_api.h"
+
 __device__ void quicksort(float * a,int * indices,int left,int right)
 {
     int i,j,t,temp2;

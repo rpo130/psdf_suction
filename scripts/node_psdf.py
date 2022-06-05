@@ -1,9 +1,11 @@
 #!/usr/bin/python3
 import os
+from turtle import shape
 import numpy as np
 import json
 import torch
 from scipy.spatial.transform.rotation import Rotation as R
+from skimage import measure
 import cv2
 
 import rospy
@@ -13,7 +15,7 @@ import geometry_msgs.msg
 import message_filters
 
 from psdf import PSDF
-from configs import config
+from configs import config, DEVICE
 
 def compute_surface_normal(point_map):
     height, width, _ = point_map.shape
@@ -44,7 +46,7 @@ def compute_surface_normal(point_map):
 def flatten(psdf, smooth=False, ksize=5, sigmaColor=0.1, sigmaSpace=5):
 
     # find surface point
-    surface_mask = torch.abs(psdf.sdf) <= 0.01
+    surface_mask = psdf.sdf <= 0.01
     surface_mask_flat = torch.max(surface_mask, dim=-1)[0]
 
     # get height map
@@ -75,24 +77,22 @@ def flatten(psdf, smooth=False, ksize=5, sigmaColor=0.1, sigmaSpace=5):
     # # normals = torch.flip(normals, dims=[0,1])
     # color_map = torch.flip(color_map, dims=[0,1])
 
-    return point_map, normal_map, variances_map, color_map
+    return (point_map.cpu().numpy(), 
+            normal_map.cpu().numpy(), 
+            variances_map.cpu().numpy(), 
+            color_map.cpu().numpy())
 
 def get_point_cloud(psdf):
-    return psdf.positions[torch.abs(psdf.sdf) <= 0.01]
+    verts, _, _, _ = measure.marching_cubes(psdf.sdf.cpu().numpy(), 0)
+    return (verts * config.volume_resolution) @ config.T_volume_to_world[:3, :3] + config.T_volume_to_world[:3, 3]
+    # return psdf.positions[psdf.sdf <= 0.01].cpu().numpy()
 
 def main():
     rospy.init_node("psdf")
-    show_point_cloud = rosparam.get_param("/psdf_suction/psdf/show_point_cloud")
-    print(show_point_cloud)
-    print(type(show_point_cloud))
+    show = rosparam.get_param(rospy.get_name() + "/show")
 
     # initialize PSDF
-    range = np.array([
-        [config.x_min, config.x_max],
-        [config.y_min, config.y_max],
-        [config.z_min, config.z_max]
-    ])
-    psdf = PSDF(range, config.resolution, with_color=True)
+    psdf = PSDF(config.volume_shape, config.volume_resolution, device=DEVICE, with_color=True)
 
     # load camera intrinsic and hand-eye-calibration
     with open(os.path.join(os.path.dirname(__file__), "../config/cam_info_realsense.json"), 'r') as f:
@@ -103,14 +103,21 @@ def main():
     T_cam_to_tool0 = np.array(cam_info["cam_to_tool0"]).reshape(4, 4)
 
     # publish "point map" which is required by analysis module
-    point_map_pub = rospy.Publisher("psdf/point_map", sensor_msgs.msg.Image, queue_size=1)
-    normal_map_pub = rospy.Publisher("psdf/normal_map", sensor_msgs.msg.Image, queue_size=1)
-    variance_map_pub = rospy.Publisher("psdf/variance_map", sensor_msgs.msg.Image, queue_size=1)
-    if show_point_cloud:
-        point_cloud_pub = rospy.Publisher("/psdf_suction/psdf/point_cloud", sensor_msgs.msg.PointCloud, queue_size=1)
-        rospy.loginfo("PSDF output point cloud topic: /psdf_suction/psdf/point_cloud")
-        # depth_pub = rospy.Publisher("/psdf_suction/psdf/depth", sensor_msgs.msg.PointCloud, queue_size=1)
-        # rospy.loginfo("PSDF output depth topic: /psdf_suction/psdf/depth")
+    point_map_pub = rospy.Publisher(rospy.get_name() + "/point_map", sensor_msgs.msg.Image, queue_size=1)
+    normal_map_pub = rospy.Publisher(rospy.get_name() + "/normal_map", sensor_msgs.msg.Image, queue_size=1)
+    variance_map_pub = rospy.Publisher(rospy.get_name() + "/variance_map", sensor_msgs.msg.Image, queue_size=1)
+    if show:
+        point_cloud_pub = rospy.Publisher(rospy.get_name() + "/point_cloud", sensor_msgs.msg.PointCloud, queue_size=1)
+        point_image_pub = rospy.Publisher(rospy.get_name() + "/point_image", sensor_msgs.msg.Image, queue_size=1)
+        normal_image_pub = rospy.Publisher(rospy.get_name() + "/normal_image", sensor_msgs.msg.Image, queue_size=1)
+        variance_image_pub = rospy.Publisher(rospy.get_name() + "/variance_image", sensor_msgs.msg.Image, queue_size=1)
+        depth_cloud_pub = rospy.Publisher(rospy.get_name() + "/depth_cloud", sensor_msgs.msg.PointCloud, queue_size=1)
+        rospy.loginfo("PSDF show topic:")
+        rospy.loginfo("\t" + point_cloud_pub.resolved_name)
+        rospy.loginfo("\t" + point_image_pub.resolved_name)
+        rospy.loginfo("\t" + normal_image_pub.resolved_name)
+        rospy.loginfo("\t" + variance_image_pub.resolved_name)
+        rospy.loginfo("\t" + depth_cloud_pub.resolved_name)
 
     # subscribe camera and robot pose
     # and fuse new data to PSDF
@@ -127,40 +134,61 @@ def main():
         T_tool0_to_world[:3, :3] = R.from_quat([q.x, q.y, q.z, q.w]).as_matrix()
         T_tool0_to_world[:3, 3] = [p.x, p.y, p.z]
         T_cam_to_world = T_tool0_to_world @ T_cam_to_tool0
+        T_cam_to_volume = np.linalg.inv(config.T_volume_to_world) @ T_cam_to_world
         
-        psdf.fuse(np.copy(depth), cam_intr, T_cam_to_world, color=np.copy(color))
+        # fuse new data
+        psdf.fuse(np.copy(depth), cam_intr, T_cam_to_volume, color=np.copy(color))
+        # flatten to 2D point image
         point_map, normal_map, variance_map, _ = flatten(psdf)
 
-        point_map_pub.publish(
-            sensor_msgs.msg.Image(
-                data=point_map.cpu().numpy().tobytes(), 
-                height=psdf.shape[0], 
-                width=psdf.shape[1]
-            )
-        )
-        normal_map_pub.publish(
-            sensor_msgs.msg.Image(
-                data=normal_map.cpu().numpy().tobytes(), 
-                height=psdf.shape[0], 
-                width=psdf.shape[1]
-            )
-        )
-        variance_map_pub.publish(
-            sensor_msgs.msg.Image(
-                data=variance_map.cpu().numpy().tobytes(), 
-                height=psdf.shape[0], 
-                width=psdf.shape[1]
-            )
-        )
-        if show_point_cloud:
+        # publishing topic message
+        point_map_pub.publish(sensor_msgs.msg.Image(
+            data=point_map.tobytes(), height=psdf.shape[0], width=psdf.shape[1]
+        ))
+        normal_map_pub.publish(sensor_msgs.msg.Image(
+            data=normal_map.tobytes(), height=psdf.shape[0], width=psdf.shape[1]
+        ))
+        variance_map_pub.publish(sensor_msgs.msg.Image(
+            data=variance_map.tobytes(), height=psdf.shape[0], width=psdf.shape[1]
+        ))
+        if show:
+            # point cloud
             point_cloud_msg = sensor_msgs.msg.PointCloud()
             point_cloud_msg.header.frame_id = "base_link"
-            # psdf
-            point_cloud = get_point_cloud(psdf).cpu().numpy()
+            point_cloud = get_point_cloud(psdf)
             point_cloud_msg.points = []
             for point in point_cloud:
                 point_cloud_msg.points.append(geometry_msgs.msg.Point32(x=point[0], y=point[1], z=point[2]))
             point_cloud_pub.publish(point_cloud_msg)
+            # point image
+            point_image_pub.publish(sensor_msgs.msg.Image(
+                data=((point_map[..., 2] - config.T_volume_to_world[2, 3]) / config.volume_range[2]).tobytes(),
+                height=psdf.shape[0], width=psdf.shape[1],
+                encoding="32FC1"
+            ))
+            # normal image
+            normal_image_pub.publish(sensor_msgs.msg.Image(
+                data=((normal_map[..., 2] + 1) / 2).tobytes(),
+                height=psdf.shape[0], width=psdf.shape[1],
+                encoding="32FC1"
+            ))
+            # variance image
+            variance_image_pub.publish(sensor_msgs.msg.Image(
+                data=((variance_map - variance_map.min()) / (variance_map.max() - variance_map.min())).tobytes(),
+                height=psdf.shape[0], width=psdf.shape[1],
+                encoding="32FC1"
+            ))
+            # depth cloud
+            depth_cloud_msg = sensor_msgs.msg.PointCloud()
+            depth_cloud_msg.header.frame_id = "base_link"
+            I, J = np.meshgrid(np.arange(depth.shape[0]), np.arange(depth.shape[1]), indexing="ij")
+            point_cloud = np.stack([J+0.5, I+0.5, np.ones_like(I)], axis=-1) @ np.linalg.inv(cam_intr).T * depth[..., None]
+            point_cloud = point_cloud.reshape(-1, 3)
+            point_cloud = point_cloud @ T_cam_to_world[:3, :3] + T_cam_to_world[:3, 3]
+            depth_cloud_msg.points = []
+            for point in point_cloud:
+                depth_cloud_msg.points.append(geometry_msgs.msg.Point32(x=point[0], y=point[1], z=point[2]))
+            depth_cloud_pub.publish(depth_cloud_msg)
 
     depth_sub = message_filters.Subscriber(cam_info["depth_topic"], sensor_msgs.msg.Image)
     color_sub = message_filters.Subscriber(cam_info["color_topic"], sensor_msgs.msg.Image)

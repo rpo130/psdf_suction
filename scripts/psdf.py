@@ -3,41 +3,30 @@ import numpy as np
 
 
 class PSDF:
-    def __init__(self, range, resolution, device="cuda:0", with_color=False):
-        self.device = device
-        self.with_color = with_color
+    def __init__(self, shape, resolution, device="cuda:0", with_color=False):
+        self.shape = shape
         self.resolution = resolution
         self.truncate_margin = resolution * 5
-
-        # volume size
-        self.range = range
-        self.shape = np.ceil((self.range[:, 1]-self.range[:, 0])/self.resolution).astype(np.int)
-        self.range[:, 1] = self.range[:, 0] + self.shape * self.resolution
+        self.device = device
+        self.with_color = with_color
 
         # initialization
-        I, J, K = torch.meshgrid(torch.arange(self.shape[0], device=device),
-                                 torch.arange(self.shape[1], device=device),
-                                 torch.arange(self.shape[2], device=device))
-        self.indices = torch.stack([I, J, K], dim=-1)
-        self.positions = (self.indices.float() + 0.5) * self.resolution \
-                         + torch.from_numpy(self.range[:, 0].reshape(1, 3)).float().to(device)
+        I, J, K = np.meshgrid(np.arange(self.shape[0]),
+                                np.arange(self.shape[1]),
+                                np.arange(self.shape[2]),
+                                indexing='ij')
+        self.indices = torch.from_numpy(np.stack([I, J, K], axis=-1)).to(device)
+        self.positions = (self.indices.float() + 0.5) * self.resolution
         self.sdf = torch.ones(self.shape.tolist(), dtype=torch.float32, device=device)
         self.var = torch.ones(self.shape.tolist(), dtype=torch.float32, device=device) * 1e-3
         if with_color:
             self.rgb = torch.zeros(self.shape.tolist()+[3], dtype=torch.uint8, device=device)
-            
-        print("volume shape:", self.shape)
-        print("volume range:\n", self.range)
 
     def camera2pixel(self, points, intrinsic):
         uv_ = torch.round((points / points[..., 2:3]) @ intrinsic.T)
         return uv_[..., :2].long()
 
-    def rigid_transform(self, points, pose):
-        points_ = torch.cat([points, torch.ones_like(points[..., [0]])], dim=-1)
-        return (points_ @ pose.T)[..., :3]
-
-    def fuse(self, depth, intrinsic, camera_pose, color=None, method='dynamic', beta=5):
+    def fuse(self, depth, intrinsic, T_cam_to_vol, color=None, method='dynamic', beta=5):
         """
 
         :param depth:
@@ -55,11 +44,12 @@ class PSDF:
             color = torch.from_numpy(color).to(self.device)
 
         cam_intr = torch.FloatTensor(intrinsic).to(self.device)
-        T_cam2world = torch.FloatTensor(camera_pose).to(self.device)
-        T_world2cam = torch.inverse(T_cam2world)
+        T_cam_to_vol = torch.FloatTensor(T_cam_to_vol).to(self.device)
+        R_vol_to_cam = T_cam_to_vol[:3, :3].T
+        t_vol_to_cam = - R_vol_to_cam @ T_cam_to_vol[:3, 3]
 
         # find all voxel within the camera view
-        cam_coors = self.rigid_transform(self.positions, T_world2cam)
+        cam_coors = self.positions @ R_vol_to_cam + t_vol_to_cam
         img_coors = self.camera2pixel(cam_coors, cam_intr)
         valid_mask = (
                 (0 <= img_coors[..., 0]) * (img_coors[..., 0] < width)
