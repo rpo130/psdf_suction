@@ -127,9 +127,12 @@ def main():
         grasp_normal = normal_map[i, j].tolist()
         
 
-    point_map_sub = message_filters.Subscriber(rospy.get_namespace() + "psdf/point_map", sensor_msgs.msg.Image)
-    normal_map_sub = message_filters.Subscriber(rospy.get_namespace() + "psdf/normal_map", sensor_msgs.msg.Image)
-    variance_map_sub = message_filters.Subscriber(rospy.get_namespace() + "psdf/variance_map", sensor_msgs.msg.Image)
+    point_map_sub = message_filters.Subscriber(rospy.get_namespace() + "psdf/point_map", 
+        sensor_msgs.msg.Image, queue_size=1, buff_size=2*config.volume_shape[0]*config.volume_shape[1]*4*3)
+    normal_map_sub = message_filters.Subscriber(rospy.get_namespace() + "psdf/normal_map", 
+        sensor_msgs.msg.Image, queue_size=1, buff_size=2*config.volume_shape[0]*config.volume_shape[1]*4*3)
+    variance_map_sub = message_filters.Subscriber(rospy.get_namespace() + "psdf/variance_map", 
+        sensor_msgs.msg.Image, queue_size=1, buff_size=2*config.volume_shape[0]*config.volume_shape[1]*4)
     sub_syn = message_filters.ApproximateTimeSynchronizer(
         [point_map_sub, normal_map_sub, variance_map_sub], 1e10, 1e-3, allow_headerless=True)
     sub_syn.registerCallback(planning_cb)

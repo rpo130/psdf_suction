@@ -26,7 +26,7 @@ class PSDF:
         uv_ = torch.round((points / points[..., 2:3]) @ intrinsic.T)
         return uv_[..., :2].long()
 
-    def fuse(self, depth, intrinsic, T_cam_to_vol, color=None, method='dynamic', beta=5):
+    def fuse(self, depth, intrinsic, T_cam_to_vol, color=None, method='dynamic', beta=1):
         """
 
         :param depth:
@@ -97,8 +97,11 @@ class PSDF:
                 self.rgb[x, y, z] = (p[..., None] * self.rgb[x, y, z] + q[..., None] * rgb_new).type(torch.uint8)
         elif method == "average":
             self.sdf[x, y, z] = sdf_old + 1 / beta * (sdf_new - sdf_old)
+            self.var[x, y, z] = 1e-5
             if self.with_color and color is not None:
                 self.rgb[x, y, z] = (self.rgb[x, y, z] + 1 / beta * (rgb_new - self.rgb[x, y, z])).type(torch.uint8)
+        else:
+            assert(False and "wrong PSDF method")
 
 
     def axial_noise_model(self, z):

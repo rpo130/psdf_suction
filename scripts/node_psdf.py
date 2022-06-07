@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 import os
 from turtle import shape
+from dataclasses import fields
 import numpy as np
 import json
+from requests import head
 import torch
 from scipy.spatial.transform.rotation import Rotation as R
 from skimage import measure
@@ -10,6 +12,7 @@ import cv2
 
 import rospy
 import rosparam
+import std_msgs.msg
 import sensor_msgs.msg
 import geometry_msgs.msg
 import message_filters
@@ -90,6 +93,7 @@ def get_point_cloud(psdf):
 def main():
     rospy.init_node("psdf")
     show = rosparam.get_param(rospy.get_name() + "/show")
+    method = rosparam.get_param(rospy.get_name() + "/method")
 
     # initialize PSDF
     psdf = PSDF(config.volume_shape, config.volume_resolution, device=DEVICE, with_color=True)
@@ -107,11 +111,11 @@ def main():
     normal_map_pub = rospy.Publisher(rospy.get_name() + "/normal_map", sensor_msgs.msg.Image, queue_size=1)
     variance_map_pub = rospy.Publisher(rospy.get_name() + "/variance_map", sensor_msgs.msg.Image, queue_size=1)
     if show:
-        point_cloud_pub = rospy.Publisher(rospy.get_name() + "/point_cloud", sensor_msgs.msg.PointCloud, queue_size=1)
+        point_cloud_pub = rospy.Publisher(rospy.get_name() + "/point_cloud", sensor_msgs.msg.PointCloud2, queue_size=1)
         point_image_pub = rospy.Publisher(rospy.get_name() + "/point_image", sensor_msgs.msg.Image, queue_size=1)
         normal_image_pub = rospy.Publisher(rospy.get_name() + "/normal_image", sensor_msgs.msg.Image, queue_size=1)
         variance_image_pub = rospy.Publisher(rospy.get_name() + "/variance_image", sensor_msgs.msg.Image, queue_size=1)
-        depth_cloud_pub = rospy.Publisher(rospy.get_name() + "/depth_cloud", sensor_msgs.msg.PointCloud, queue_size=1)
+        depth_cloud_pub = rospy.Publisher(rospy.get_name() + "/depth_cloud", sensor_msgs.msg.PointCloud2, queue_size=1)
         rospy.loginfo("PSDF show topic:")
         rospy.loginfo("\t" + point_cloud_pub.resolved_name)
         rospy.loginfo("\t" + point_image_pub.resolved_name)
@@ -123,13 +127,13 @@ def main():
     # and fuse new data to PSDF
     def fuse_cb(depth_msg : sensor_msgs.msg.Image, 
                 color_msg : sensor_msgs.msg.Image, 
-                tool0_pose_msg : geometry_msgs.msg.Pose):
+                tool0_pose_msg : geometry_msgs.msg.PoseStamped):
         assert(depth_msg.height == cam_height and depth_msg.width == cam_width)
         assert(color_msg.height == cam_height and color_msg.width == cam_width)
         depth = np.frombuffer(depth_msg.data, dtype=np.uint16).astype(np.float32).reshape(cam_height, cam_width) / 1000
         color = np.frombuffer(color_msg.data, dtype=np.uint8).reshape(cam_height, cam_width, 3)
         
-        p, q = tool0_pose_msg.position, tool0_pose_msg.orientation
+        p, q = tool0_pose_msg.pose.position, tool0_pose_msg.pose.orientation
         T_tool0_to_world = np.eye(4)
         T_tool0_to_world[:3, :3] = R.from_quat([q.x, q.y, q.z, q.w]).as_matrix()
         T_tool0_to_world[:3, 3] = [p.x, p.y, p.z]
@@ -137,11 +141,17 @@ def main():
         T_cam_to_volume = np.linalg.inv(config.T_volume_to_world) @ T_cam_to_world
         
         # fuse new data
-        psdf.fuse(np.copy(depth), cam_intr, T_cam_to_volume, color=np.copy(color))
+        ts = rospy.rostime.get_time()
+        psdf.fuse(np.copy(depth), cam_intr, T_cam_to_volume, color=np.copy(color), method=method)
+        rospy.loginfo("fuse time %f"%(rospy.rostime.get_time()-ts))
+
         # flatten to 2D point image
+        ts = rospy.rostime.get_time()
         point_map, normal_map, variance_map, _ = flatten(psdf)
+        rospy.loginfo("flatten time %f"%(rospy.rostime.get_time()-ts))
 
         # publishing topic message
+        ts = rospy.rostime.get_time()
         point_map_pub.publish(sensor_msgs.msg.Image(
             data=point_map.tobytes(), height=psdf.shape[0], width=psdf.shape[1]
         ))
@@ -151,14 +161,26 @@ def main():
         variance_map_pub.publish(sensor_msgs.msg.Image(
             data=variance_map.tobytes(), height=psdf.shape[0], width=psdf.shape[1]
         ))
+        rospy.loginfo("publish time %f"%(rospy.rostime.get_time()-ts))
         if show:
+            ts = rospy.rostime.get_time()
             # point cloud
-            point_cloud_msg = sensor_msgs.msg.PointCloud()
-            point_cloud_msg.header.frame_id = "base_link"
-            point_cloud = get_point_cloud(psdf)
-            point_cloud_msg.points = []
-            for point in point_cloud:
-                point_cloud_msg.points.append(geometry_msgs.msg.Point32(x=point[0], y=point[1], z=point[2]))
+            point_cloud = get_point_cloud(psdf).astype(np.float32)
+            point_size = point_cloud.dtype.itemsize * 3
+            point_cloud_msg = sensor_msgs.msg.PointCloud2(
+                header=std_msgs.msg.Header(frame_id="base_link", stamp=rospy.Time.now()),
+                fields=[sensor_msgs.msg.PointField(name=name,
+                                                    offset=point_cloud.dtype.itemsize*i, 
+                                                    datatype=sensor_msgs.msg.PointField.FLOAT32, 
+                                                    count=1) for i, name in enumerate("xyz")],
+                data=point_cloud.tobytes(),
+                height=point_cloud.shape[0],
+                width=1,
+                point_step=point_size,
+                row_step=point_size,
+                is_dense=False,
+                is_bigendian=False
+            )
             point_cloud_pub.publish(point_cloud_msg)
             # point image
             point_image_pub.publish(sensor_msgs.msg.Image(
@@ -179,21 +201,37 @@ def main():
                 encoding="32FC1"
             ))
             # depth cloud
-            depth_cloud_msg = sensor_msgs.msg.PointCloud()
-            depth_cloud_msg.header.frame_id = "base_link"
             I, J = np.meshgrid(np.arange(depth.shape[0]), np.arange(depth.shape[1]), indexing="ij")
-            point_cloud = np.stack([J+0.5, I+0.5, np.ones_like(I)], axis=-1) @ np.linalg.inv(cam_intr).T * depth[..., None]
-            point_cloud = point_cloud.reshape(-1, 3)
-            point_cloud = point_cloud @ T_cam_to_world[:3, :3] + T_cam_to_world[:3, 3]
-            depth_cloud_msg.points = []
-            for point in point_cloud:
-                depth_cloud_msg.points.append(geometry_msgs.msg.Point32(x=point[0], y=point[1], z=point[2]))
+            depth_cloud = np.stack([J+0.5, I+0.5, np.ones_like(I)], axis=-1) @ np.linalg.inv(cam_intr).T * depth[..., None]
+            depth_cloud = depth_cloud.reshape(-1, 3)
+            depth_cloud = (depth_cloud @ T_cam_to_world[:3, :3] + T_cam_to_world[:3, 3]).astype(np.float32)
+            point_size = depth_cloud.dtype.itemsize * 3
+            depth_cloud_msg = sensor_msgs.msg.PointCloud2(
+                header=std_msgs.msg.Header(frame_id="base_link", stamp=rospy.Time.now()),
+                fields=[sensor_msgs.msg.PointField(name=name,
+                                                    offset=depth_cloud.dtype.itemsize*i, 
+                                                    datatype=sensor_msgs.msg.PointField.FLOAT32, 
+                                                    count=1) for i, name in enumerate("xyz")],
+                data=depth_cloud.tobytes(),
+                height=depth_cloud.shape[0],
+                width=1,
+                point_step=point_size,
+                row_step=point_size,
+                is_dense=False,
+                is_bigendian=False
+            )
             depth_cloud_pub.publish(depth_cloud_msg)
+            rospy.loginfo("show time %f"%(rospy.rostime.get_time()-ts))
 
-    depth_sub = message_filters.Subscriber(cam_info["depth_topic"], sensor_msgs.msg.Image)
-    color_sub = message_filters.Subscriber(cam_info["color_topic"], sensor_msgs.msg.Image)
-    tool0_sub = message_filters.Subscriber(cam_info["tool0_pose_topic"], geometry_msgs.msg.Pose)
-    sub_syn = message_filters.ApproximateTimeSynchronizer([depth_sub, color_sub, tool0_sub], 1e10, 1e-3, allow_headerless=True)
+    queue_size = 1
+    depth_sub = message_filters.Subscriber(cam_info["depth_topic"], 
+        sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*640*480*2)
+    color_sub = message_filters.Subscriber(cam_info["color_topic"], 
+        sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*640*480*3)
+    tool0_sub = message_filters.Subscriber(cam_info["tool0_pose_topic"], 
+        geometry_msgs.msg.PoseStamped, queue_size=queue_size)
+    sub_syn = message_filters.ApproximateTimeSynchronizer(
+        [depth_sub, color_sub, tool0_sub], 10, 1e-3)
     sub_syn.registerCallback(fuse_cb)
 
     rospy.loginfo("PSDF running")
