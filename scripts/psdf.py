@@ -4,7 +4,7 @@ import numpy as np
 
 class PSDF:
     def __init__(self, shape, resolution, device="cuda:0", with_color=False):
-        self.shape = shape
+        self.shape = np.array(shape)
         self.resolution = resolution
         self.truncate_margin = resolution * 5
         self.device = device

@@ -15,6 +15,7 @@ def main():
     func_get_grasp_pose = rospy.ServiceProxy("/psdf_suction/planner/get_grasp_pose", psdf_suction.srv.GetGraspPose)
 
     while not rospy.is_shutdown():
+        input()
         req = psdf_suction.srv.GetGraspPoseRequest()
         req.previous_grasp_position = np.array([0, 0, 0])
         req.mask = sensor_msgs.msg.Image(

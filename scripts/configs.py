@@ -20,7 +20,7 @@ class Config:
         # PSDF
         self.volume_range = np.array([0.5, 0.5, 0.5])
         self.volume_resolution = 0.002
-        self.volume_shape = np.ceil(self.volume_range / self.volume_resolution).astype(np.int32)
+        self.volume_shape = np.ceil(self.volume_range / self.volume_resolution).astype(np.int32).tolist()
         self.T_volume_to_world = np.eye(4)
         self.T_volume_to_world[:3, 3] = [-0.25, -0.25, 0.0]
 

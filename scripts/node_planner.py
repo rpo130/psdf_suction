@@ -1,8 +1,5 @@
 #!/usr/bin/python3
-from gruut import sentences
-from matplotlib.pyplot import axis
 import numpy as np
-import torch
 from scipy.spatial.transform.rotation import Rotation as R
 import cv2
 
@@ -83,12 +80,11 @@ def main():
         global grasp_position
         global grasp_normal
         global request_mask
-        print("planning", planning)
+
         if planning is False or position_pre is None:
             rospy.rostime.wallsleep(0.01)
             return
         planning = False
-        print("planning")
 
         height, width = point_map_msg.height, point_map_msg.width
         point_map = np.frombuffer(point_map_msg.data, dtype=np.float32).reshape(height, width, 3).copy()
@@ -126,19 +122,19 @@ def main():
         grasp_position = point_map[i, j].tolist()
         grasp_normal = normal_map[i, j].tolist()
         
-
+    image_size = config.volume_shape[0] * config.volume_shape[1]
     point_map_sub = message_filters.Subscriber(rospy.get_namespace() + "psdf/point_map", 
-        sensor_msgs.msg.Image, queue_size=1, buff_size=2*config.volume_shape[0]*config.volume_shape[1]*4*3)
+        sensor_msgs.msg.Image, queue_size=1, buff_size=2*image_size*4*3)
     normal_map_sub = message_filters.Subscriber(rospy.get_namespace() + "psdf/normal_map", 
-        sensor_msgs.msg.Image, queue_size=1, buff_size=2*config.volume_shape[0]*config.volume_shape[1]*4*3)
+        sensor_msgs.msg.Image, queue_size=1, buff_size=2*image_size*4*3)
     variance_map_sub = message_filters.Subscriber(rospy.get_namespace() + "psdf/variance_map", 
-        sensor_msgs.msg.Image, queue_size=1, buff_size=2*config.volume_shape[0]*config.volume_shape[1]*4)
+        sensor_msgs.msg.Image, queue_size=1, buff_size=2*image_size*4)
     sub_syn = message_filters.ApproximateTimeSynchronizer(
         [point_map_sub, normal_map_sub, variance_map_sub], 1e10, 1e-3, allow_headerless=True)
     sub_syn.registerCallback(planning_cb)
 
     # service for getting new grasp pose
-    def get_grasp_pose_cb(req):
+    def get_grasp_pose_cb(req : psdf_suction.srv.GetGraspPoseRequest):
         global planning
         global position_pre
         global request_mask
