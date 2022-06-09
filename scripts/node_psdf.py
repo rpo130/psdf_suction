@@ -127,17 +127,16 @@ def main():
     # and fuse new data to PSDF
     def fuse_cb(depth_msg : sensor_msgs.msg.Image, 
                 color_msg : sensor_msgs.msg.Image, 
-                tool0_pose_msg : geometry_msgs.msg.PoseStamped):
+                camera_pose_msg : geometry_msgs.msg.PoseStamped):
         assert(depth_msg.height == cam_height and depth_msg.width == cam_width)
         assert(color_msg.height == cam_height and color_msg.width == cam_width)
         depth = np.frombuffer(depth_msg.data, dtype=np.uint16).astype(np.float32).reshape(cam_height, cam_width) / 1000
         color = np.frombuffer(color_msg.data, dtype=np.uint8).reshape(cam_height, cam_width, 3)
         
-        p, q = tool0_pose_msg.pose.position, tool0_pose_msg.pose.orientation
-        T_tool0_to_world = np.eye(4)
-        T_tool0_to_world[:3, :3] = R.from_quat([q.x, q.y, q.z, q.w]).as_matrix()
-        T_tool0_to_world[:3, 3] = [p.x, p.y, p.z]
-        T_cam_to_world = T_tool0_to_world @ T_cam_to_tool0
+        p, q = camera_pose_msg.pose.position, camera_pose_msg.pose.orientation
+        T_cam_to_world = np.eye(4)
+        T_cam_to_world[:3, :3] = R.from_quat([q.x, q.y, q.z, q.w]).as_matrix()
+        T_cam_to_world[:3, 3] = [p.x, p.y, p.z]
         T_cam_to_volume = np.linalg.inv(config.T_volume_to_world) @ T_cam_to_world
         
         # fuse new data
@@ -228,7 +227,7 @@ def main():
         sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*640*480*2)
     color_sub = message_filters.Subscriber(cam_info["color_topic"], 
         sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*640*480*3)
-    tool0_sub = message_filters.Subscriber(cam_info["tool0_pose_topic"], 
+    tool0_sub = message_filters.Subscriber(rospy.get_namespace + "camera_pose", 
         geometry_msgs.msg.PoseStamped, queue_size=queue_size)
     sub_syn = message_filters.ApproximateTimeSynchronizer(
         [depth_sub, color_sub, tool0_sub], 10, 1e-3)

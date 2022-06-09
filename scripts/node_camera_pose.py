@@ -19,7 +19,7 @@ if __name__ == '__main__':
     tfBuffer = tf2_ros.Buffer()
     listener = tf2_ros.TransformListener(tfBuffer)
 
-    cam_pose_pub = rospy.Publisher(rospy.get_namespace() + 'cam_pose', geometry_msgs.msg.PoseStamped, queue_size=1)
+    cam_pose_pub = rospy.Publisher(rospy.get_namespace() + 'camera_pose', geometry_msgs.msg.PoseStamped, queue_size=1)
     with open(os.path.join(config.path, "config/cam_info_realsense.json"), 'r') as f:
         cam_info = json.load(f)
         T_cam_to_tool0 = np.array(cam_info["cam_to_tool0"]).reshape(4, 4)

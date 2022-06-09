@@ -9,6 +9,5 @@
         0, 0, 0, 1
     ],
     "depth_topic": "/camera/aligned_depth_to_color/image_raw",
-    "color_topic": "/camera/color/image_raw",
-    "tool0_pose_topic": "/tool0_pose"
+    "color_topic": "/camera/color/image_raw"
 }
