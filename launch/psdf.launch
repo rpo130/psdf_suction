@@ -1,6 +1,7 @@
 <launch>
     <arg name="show" default="false" />
     <arg name="method" default="dynamic" />
+    <node pkg="psdf_suction" type="node_camera_pose.py" name="camera_pose" ns="psdf_suction" output="screen" />
     <node pkg="psdf_suction" type="node_psdf.py" name="psdf" ns="psdf_suction" output="screen" >
         <param name="show" type="bool" value="$(arg show)" />
         <param name="method" type="string" value="$(arg method)" />
