@@ -39,7 +39,8 @@ if __name__ == '__main__':
         T_tool0_to_world[:3, :3] = R.from_quat(q).as_dcm()
         T_tool0_to_world[:3, 3] = - np.matmul(T_tool0_to_world[:3, :3], t)
 
-        T_cam_to_world = np.matmul(T_tool0_to_world, T_cam_to_tool0)
+        # T_cam_to_world = np.matmul(T_tool0_to_world, T_cam_to_tool0)
+        T_cam_to_world = np.eye(4)
         q = R.from_dcm(T_cam_to_world[:3, :3]).as_quat()
         t = T_cam_to_world[:3, 3]
         cam_pose_pub.publish(geometry_msgs.msg.PoseStamped(

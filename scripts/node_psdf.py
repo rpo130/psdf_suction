@@ -86,7 +86,7 @@ def flatten(psdf, smooth=False, ksize=5, sigmaColor=0.1, sigmaSpace=5):
             color_map.cpu().numpy())
 
 def get_point_cloud(psdf):
-    verts, _, _, _ = measure.marching_cubes(psdf.sdf.cpu().numpy(), 0)
+    verts, _, _, _ = measure.marching_cubes_lewiner(psdf.sdf.cpu().numpy(), 0)
     return (verts * config.volume_resolution) @ config.T_volume_to_world[:3, :3] + config.T_volume_to_world[:3, 3]
     # return psdf.positions[psdf.sdf <= 0.01].cpu().numpy()
 
@@ -227,7 +227,7 @@ def main():
         sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*640*480*2)
     color_sub = message_filters.Subscriber(cam_info["color_topic"], 
         sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*640*480*3)
-    tool0_sub = message_filters.Subscriber(rospy.get_namespace + "camera_pose", 
+    tool0_sub = message_filters.Subscriber(rospy.get_namespace() + "camera_pose", 
         geometry_msgs.msg.PoseStamped, queue_size=queue_size)
     sub_syn = message_filters.ApproximateTimeSynchronizer(
         [depth_sub, color_sub, tool0_sub], 10, 1e-3)
