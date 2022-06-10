@@ -70,7 +70,16 @@ roslaunch moveit_py3 moveit_py3.launch
 roslaunch realsense2_camera rs_aligned_depth.launch
 ```
 
-## 2. run PSDF-Suction
+## 2. show PSDF
+```bash
+# run psdf node
+roslaunch psdf_suction psdf.launch show:=True
+# show in rviz
+roscd psdf_suction
+rosrun rviz rviz -d config/psdf_point_cloud.rviz
+```
+
+## 3. run PSDF-Suction
 ```bash
 cd /path/to/psdf_suction
 python3 scripts/ex_main.py

@@ -22,7 +22,9 @@ class Config:
         self.volume_resolution = 0.002
         self.volume_shape = np.ceil(self.volume_range / self.volume_resolution).astype(np.int32).tolist()
         self.T_volume_to_world = np.eye(4)
-        self.T_volume_to_world[:3, 3] = [-0.25, -0.25, 0.0]
+        self.T_volume_to_world[:3, 3] = [0.0, -0.25, 0.02]
+        self.T_world_to_volume = np.eye(4)
+        self.T_world_to_volume[:3, 3] = -self.T_volume_to_world[:3, 3]
 
         # setting init pose
         # which camera is on top of the middle of workspace

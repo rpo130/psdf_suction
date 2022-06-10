@@ -49,7 +49,7 @@ class PSDF:
         t_vol_to_cam = - R_vol_to_cam @ T_cam_to_vol[:3, 3]
 
         # find all voxel within the camera view
-        cam_coors = self.positions @ R_vol_to_cam + t_vol_to_cam
+        cam_coors = self.positions @ R_vol_to_cam.T + t_vol_to_cam
         img_coors = self.camera2pixel(cam_coors, cam_intr)
         valid_mask = (
                 (0 <= img_coors[..., 0]) * (img_coors[..., 0] < width)

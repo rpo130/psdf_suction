@@ -7,6 +7,7 @@ from scipy.spatial.transform.rotation import Rotation as R
 
 import rospy
 import tf2_ros
+import tf.transformations as tf_trans
 import geometry_msgs.msg
 import std_msgs.msg
 
@@ -26,7 +27,7 @@ if __name__ == '__main__':
 
     while not rospy.is_shutdown():
         try:
-            trans = tfBuffer.lookup_transform('tool0', 'base_link', rospy.Time())
+            trans = tfBuffer.lookup_transform('base_link', 'tool0', rospy.Time())
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             rate.sleep()
             continue
@@ -37,10 +38,9 @@ if __name__ == '__main__':
         t = np.array([t.x, t.y, t.z])
         T_tool0_to_world = np.eye(4)
         T_tool0_to_world[:3, :3] = R.from_quat(q).as_dcm()
-        T_tool0_to_world[:3, 3] = - np.matmul(T_tool0_to_world[:3, :3], t)
+        T_tool0_to_world[:3, 3] = t
 
-        # T_cam_to_world = np.matmul(T_tool0_to_world, T_cam_to_tool0)
-        T_cam_to_world = np.eye(4)
+        T_cam_to_world = np.matmul(T_tool0_to_world, T_cam_to_tool0)
         q = R.from_dcm(T_cam_to_world[:3, :3]).as_quat()
         t = T_cam_to_world[:3, 3]
         cam_pose_pub.publish(geometry_msgs.msg.PoseStamped(

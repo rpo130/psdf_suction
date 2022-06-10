@@ -87,7 +87,7 @@ def flatten(psdf, smooth=False, ksize=5, sigmaColor=0.1, sigmaSpace=5):
 
 def get_point_cloud(psdf):
     verts, _, _, _ = measure.marching_cubes_lewiner(psdf.sdf.cpu().numpy(), 0)
-    return (verts * config.volume_resolution) @ config.T_volume_to_world[:3, :3] + config.T_volume_to_world[:3, 3]
+    return (verts * config.volume_resolution) @ config.T_volume_to_world[:3, :3].T + config.T_volume_to_world[:3, 3]
     # return psdf.positions[psdf.sdf <= 0.01].cpu().numpy()
 
 def main():
@@ -137,7 +137,7 @@ def main():
         T_cam_to_world = np.eye(4)
         T_cam_to_world[:3, :3] = R.from_quat([q.x, q.y, q.z, q.w]).as_matrix()
         T_cam_to_world[:3, 3] = [p.x, p.y, p.z]
-        T_cam_to_volume = np.linalg.inv(config.T_volume_to_world) @ T_cam_to_world
+        T_cam_to_volume = config.T_world_to_volume @ T_cam_to_world
         
         # fuse new data
         ts = rospy.rostime.get_time()
@@ -201,9 +201,9 @@ def main():
             ))
             # depth cloud
             I, J = np.meshgrid(np.arange(depth.shape[0]), np.arange(depth.shape[1]), indexing="ij")
-            depth_cloud = np.stack([J+0.5, I+0.5, np.ones_like(I)], axis=-1) @ np.linalg.inv(cam_intr).T * depth[..., None]
+            depth_cloud = np.stack([J, I, np.ones_like(I)], axis=-1) @ np.linalg.inv(cam_intr).T * depth[..., None]
             depth_cloud = depth_cloud.reshape(-1, 3)
-            depth_cloud = (depth_cloud @ T_cam_to_world[:3, :3] + T_cam_to_world[:3, 3]).astype(np.float32)
+            depth_cloud = (depth_cloud @ T_cam_to_world[:3, :3].T + T_cam_to_world[:3, 3]).astype(np.float32)
             point_size = depth_cloud.dtype.itemsize * 3
             depth_cloud_msg = sensor_msgs.msg.PointCloud2(
                 header=std_msgs.msg.Header(frame_id="base_link", stamp=rospy.Time.now()),
