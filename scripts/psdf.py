@@ -11,11 +11,14 @@ class PSDF:
         self.with_color = with_color
 
         # initialization
+        # (xvol, yvol, zvol)
         I, J, K = np.meshgrid(np.arange(self.shape[0]),
                                 np.arange(self.shape[1]),
                                 np.arange(self.shape[2]),
                                 indexing='ij')
+        # (xvol, yvol, zvol, 3)
         self.indices = torch.from_numpy(np.stack([I, J, K], axis=-1)).to(device)
+        # (xvol, yvol, zvol, 3)
         self.positions = (self.indices.float() + 0.5) * self.resolution
         self.sdf = torch.ones(self.shape.tolist(), dtype=torch.float32, device=device)
         self.var = torch.ones(self.shape.tolist(), dtype=torch.float32, device=device) * 1e-3
@@ -23,14 +26,18 @@ class PSDF:
             self.rgb = torch.zeros(self.shape.tolist()+[3], dtype=torch.uint8, device=device)
 
     def camera2pixel(self, points, intrinsic):
+        # points (xindex,yindex,zindex,3)
+        # p (x/z, y/z, 1)
+        # (xvol, yvol, zvol, 3) = (xvol, yvol, zvol, 3) * (3,3)
         uv_ = torch.round((points / points[..., 2:3]) @ intrinsic.T)
+        # (xvol, yvol, zvol, 2)
         return uv_[..., :2].long()
 
     def fuse(self, depth, intrinsic, T_cam_to_vol, color=None, method='dynamic', beta=1):
         """
 
-        :param depth:
-        :param intrinsic:
+        :param depth: (h,w,)
+        :param intrinsic: (3,3,)
         :param camera_pose:
         :param color:
         :param method: "dynamic"(default), "normal", "average"
@@ -59,6 +66,7 @@ class PSDF:
         voxel_coors = self.indices[valid_mask].long()
         pixel_coors = img_coors[valid_mask].long()
         x, y, z = voxel_coors[:, 0], voxel_coors[:, 1], voxel_coors[:, 2]
+        #??? u, v
         v, u = pixel_coors[:, 0], pixel_coors[:, 1]
 
         # get truncated distance

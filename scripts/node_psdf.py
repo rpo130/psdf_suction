@@ -130,6 +130,7 @@ def main():
                 camera_pose_msg : geometry_msgs.msg.PoseStamped):
         assert(depth_msg.height == cam_height and depth_msg.width == cam_width)
         assert(color_msg.height == cam_height and color_msg.width == cam_width)
+        #(height,width)
         depth = np.frombuffer(depth_msg.data, dtype=np.uint16).astype(np.float32).reshape(cam_height, cam_width) / 1000
         color = np.frombuffer(color_msg.data, dtype=np.uint8).reshape(cam_height, cam_width, 3)
         
@@ -224,9 +225,9 @@ def main():
 
     queue_size = 1
     depth_sub = message_filters.Subscriber(cam_info["depth_topic"], 
-        sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*640*480*2)
+        sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*cam_height*cam_width*2)
     color_sub = message_filters.Subscriber(cam_info["color_topic"], 
-        sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*640*480*3)
+        sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*cam_height*cam_width*3)
     tool0_sub = message_filters.Subscriber(rospy.get_namespace() + "camera_pose", 
         geometry_msgs.msg.PoseStamped, queue_size=queue_size)
     sub_syn = message_filters.ApproximateTimeSynchronizer(
