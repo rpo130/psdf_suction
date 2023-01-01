@@ -23,6 +23,7 @@ from configs import config, DEVICE
 import configs
 
 def compute_surface_normal(point_map):
+    # (250, 250, 3)
     height, width, _ = point_map.shape
     s = 1
 
@@ -31,6 +32,7 @@ def compute_surface_normal(point_map):
     coor_down = torch.zeros_like(point_map).to(point_map.device)
     coor_up[s:height, ...] = point_map[0:height - s, ...]
     coor_down[0:height - s, ...] = point_map[s:height, ...]
+    # i(x+1) - i(x-1)
     dx = coor_down - coor_up
 
     # right - left
@@ -42,27 +44,39 @@ def compute_surface_normal(point_map):
 
     # normal
     surface_normal = torch.cross(dx, dy, dim=-1)
+    #(250, 250)
     norm_normal = torch.norm(surface_normal, dim=-1)
     norm_mask = (norm_normal == 0)
     surface_normal[norm_mask] = 0
     surface_normal[~norm_mask] = surface_normal[~norm_mask] / norm_normal[~norm_mask][:, None]
     return surface_normal
 
-def flatten(psdf, smooth=False, ksize=5, sigmaColor=0.1, sigmaSpace=5):
+"""
+    return : 
+        heightmap
+        heightmap-normal
+        heightmap-var
+        heightmap-color
+"""
+def flatten(psdf: PSDF, smooth=False, ksize=5, sigmaColor=0.1, sigmaSpace=5):
 
     # find surface point
+    #(250,250,250)
     surface_mask = psdf.sdf <= 0.01
+    # max in z direction
     surface_mask_flat = torch.max(surface_mask, dim=-1)[0]
 
     # get height map
     z_vol = torch.zeros_like(psdf.sdf).long()
     z_vol[surface_mask] = psdf.indices[surface_mask][:, 2]
     z_flat = torch.max(z_vol, dim=-1)[0]
+    #(250,250)
     height_map = psdf.positions[..., 2].take(z_flat)
     if smooth:
         height_map = cv2.bilateralFilter(height_map, ksize, sigmaColor, sigmaSpace)
 
     # get point map
+    # (250,250,3)
     point_map = psdf.positions[:, :, 0, :].clone()
     point_map[..., 2] = height_map
 
@@ -90,7 +104,6 @@ def flatten(psdf, smooth=False, ksize=5, sigmaColor=0.1, sigmaSpace=5):
 def get_point_cloud(psdf):
     verts, _, _, _ = measure.marching_cubes_lewiner(psdf.sdf.cpu().numpy(), 0)
     return (verts * config.volume_resolution) @ config.T_volume_to_world[:3, :3].T + config.T_volume_to_world[:3, 3]
-    # return psdf.positions[psdf.sdf <= 0.01].cpu().numpy()
 
 def main():
     rospy.init_node("psdf")
@@ -107,7 +120,6 @@ def main():
     cam_intr = np.array(cam_info["K"]).reshape(3, 3)
     cam_height = cam_info["height"]
     cam_width = cam_info["width"]
-    T_cam_to_tool0 = np.array(cam_info["cam_to_tool0"]).reshape(4, 4)
 
     # publish "point map" which is required by analysis module
     point_map_pub = rospy.Publisher(rospy.get_name() + "/point_map", sensor_msgs.msg.Image, queue_size=1)
@@ -234,7 +246,7 @@ def main():
     tool0_sub = message_filters.Subscriber(rosnamespace + "camera_pose", 
         geometry_msgs.msg.PoseStamped, queue_size=queue_size)
     sub_syn = message_filters.ApproximateTimeSynchronizer(
-        [depth_sub, color_sub, tool0_sub], 10, 1e-3)
+        [depth_sub, color_sub, tool0_sub], 10, 1)
     sub_syn.registerCallback(fuse_cb)
 
     rospy.loginfo("PSDF running")

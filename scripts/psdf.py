@@ -66,7 +66,9 @@ class PSDF:
         voxel_coors = self.indices[valid_mask].long()
         pixel_coors = img_coors[valid_mask].long()
         x, y, z = voxel_coors[:, 0], voxel_coors[:, 1], voxel_coors[:, 2]
-        #??? u, v
+        #https://dev.intelrealsense.com/docs/projection-in-intel-realsense-sdk-20#pixel-coordinates
+        #camera coor is x point right, y point down, z point forward
+        #depth row is height, col is width; height is in y-direction, col is in x-direction, so need change u,v location
         v, u = pixel_coors[:, 0], pixel_coors[:, 1]
 
         # get truncated distance

@@ -3,6 +3,7 @@ from scipy.spatial.transform import Rotation as R
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 import geometry_msgs.msg
 import torch
+from typing import Union
 
 def get_orientation(origin_ori, normal):
     z_axis = np.array([0.0, 0.0, 1.0])
@@ -168,3 +169,11 @@ def get_point_cloud_from_depth_torch(depth, intr):
     points_c = torch.stack([id[..., 1], id[..., 0], torch.ones_like(id[..., 0])], dim=-1)
     points_c = points_c @ torch.inverse(intr).T * depth.reshape(h, w, 1)
     return points_c, id
+
+"""
+    vec: n...x3 matrix
+    t: 4x4 matrix
+"""
+def apply_spatial_transformation(vec : Union[np.ndarray, torch.Tensor], t : Union[np.ndarray, torch.Tensor]):
+    vec_new = vec @ t[:3,:3].T + t[:3,3]
+    return vec_new
