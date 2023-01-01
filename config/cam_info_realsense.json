@@ -8,6 +8,6 @@
         0, 0, 1, 1.190000000000000085e-02,
         0, 0, 0, 1
     ],
-    "depth_topic": "/camera/aligned_depth_to_color/image_raw",
+    "depth_topic": "/camera/depth/image_raw",
     "color_topic": "/camera/color/image_raw"
 }

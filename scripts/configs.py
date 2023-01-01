@@ -1,9 +1,14 @@
 import os
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import rospy
 
 DEVICE = "cuda:0"
 EPSILON = 1e-6
+
+def getnamespace():
+   return rospy.get_namespace()
+#    return "/avt_grasp/"
 
 class Config:
     def __init__(self):

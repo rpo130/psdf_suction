@@ -20,6 +20,8 @@ import message_filters
 from psdf import PSDF
 from configs import config, DEVICE
 
+import configs
+
 def compute_surface_normal(point_map):
     height, width, _ = point_map.shape
     s = 1
@@ -92,6 +94,7 @@ def get_point_cloud(psdf):
 
 def main():
     rospy.init_node("psdf")
+    rosnamespace = configs.getnamespace()
     show = rosparam.get_param(rospy.get_name() + "/show")
     method = rosparam.get_param(rospy.get_name() + "/method")
 
@@ -228,7 +231,7 @@ def main():
         sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*cam_height*cam_width*2)
     color_sub = message_filters.Subscriber(cam_info["color_topic"], 
         sensor_msgs.msg.Image, queue_size=queue_size, buff_size=queue_size*cam_height*cam_width*3)
-    tool0_sub = message_filters.Subscriber(rospy.get_namespace() + "camera_pose", 
+    tool0_sub = message_filters.Subscriber(rosnamespace + "camera_pose", 
         geometry_msgs.msg.PoseStamped, queue_size=queue_size)
     sub_syn = message_filters.ApproximateTimeSynchronizer(
         [depth_sub, color_sub, tool0_sub], 10, 1e-3)
