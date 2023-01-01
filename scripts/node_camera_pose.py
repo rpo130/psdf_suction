@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 import os
 from turtle import position, stamp  
 import numpy as np
@@ -12,6 +12,8 @@ import geometry_msgs.msg
 import std_msgs.msg
 
 from configs import config
+import configs
+
 
 if __name__ == '__main__':
     rospy.init_node('cam_pose')
@@ -20,7 +22,9 @@ if __name__ == '__main__':
     tfBuffer = tf2_ros.Buffer()
     listener = tf2_ros.TransformListener(tfBuffer)
 
-    cam_pose_pub = rospy.Publisher(rospy.get_namespace() + 'camera_pose', geometry_msgs.msg.PoseStamped, queue_size=1)
+    rosnamespace = configs.getnamespace()
+
+    cam_pose_pub = rospy.Publisher(rosnamespace + 'camera_pose', geometry_msgs.msg.PoseStamped, queue_size=1)
     with open(os.path.join(config.path, "config/cam_info_realsense.json"), 'r') as f:
         cam_info = json.load(f)
         T_cam_to_tool0 = np.array(cam_info["cam_to_tool0"]).reshape(4, 4)
@@ -37,11 +41,11 @@ if __name__ == '__main__':
         t = trans.transform.translation
         t = np.array([t.x, t.y, t.z])
         T_tool0_to_world = np.eye(4)
-        T_tool0_to_world[:3, :3] = R.from_quat(q).as_dcm()
+        T_tool0_to_world[:3, :3] = R.from_quat(q).as_matrix()
         T_tool0_to_world[:3, 3] = t
 
         T_cam_to_world = np.matmul(T_tool0_to_world, T_cam_to_tool0)
-        q = R.from_dcm(T_cam_to_world[:3, :3]).as_quat()
+        q = R.from_matrix(T_cam_to_world[:3, :3]).as_quat()
         t = T_cam_to_world[:3, 3]
         cam_pose_pub.publish(geometry_msgs.msg.PoseStamped(
             header=std_msgs.msg.Header(frame_id="base_link", stamp=trans.header.stamp),
