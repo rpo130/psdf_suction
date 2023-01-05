@@ -117,3 +117,42 @@ class PSDF:
     def axial_noise_model(self, z):
         return 0.00163 + 0.0007278 * z + 0.003949 * (z ** 2)
 
+    def fuse_point(self, point_in_world : np.ndarray, T_world_to_volume):
+        """
+        point shape=(3)
+        T_world_to_volume shape=(4,4)
+        vol_range shape=(3)
+        """
+        t_world_to_vol = T_world_to_volume[:3, 3]
+        point_in_vol = point_in_world + t_world_to_vol
+
+        xp,yp,zp = point_in_vol
+        xmin = 0 * self.resolution
+        xmax = self.shape[0] * self.resolution
+        ymin = 0 * self.resolution
+        ymax = self.shape[1] * self.resolution
+        zmin = 0 * self.resolution
+        zmax = self.shape[2] * self.resolution
+
+        if xp < xmin or xp > xmax:
+            print("x out")
+            return
+        if yp < ymin or yp > ymax:
+            print("y out")
+            return            
+        if zp < zmin or zp > zmax:
+            print("z out")
+            return
+            
+        x = int(xp // self.resolution)
+        y = int(yp // self.resolution)
+        z = int(zp // self.resolution)
+
+        sdf_new = 0
+        var_new = 0
+        var_old = self.var[x, y, z]
+        sdf_old = self.sdf[x, y, z]
+        p = var_new / (var_new + var_old)
+        q = 1 - p
+        self.sdf[x, y, z] = p * sdf_old + q * sdf_new
+        self.var[x, y, z] = p * var_old
