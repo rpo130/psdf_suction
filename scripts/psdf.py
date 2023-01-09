@@ -121,7 +121,6 @@ class PSDF:
         """
         point shape=(3)
         T_world_to_volume shape=(4,4)
-        vol_range shape=(3)
         """
         t_world_to_vol = T_world_to_volume[:3, 3]
         point_in_vol = point_in_world + t_world_to_vol
@@ -150,6 +149,40 @@ class PSDF:
 
         sdf_new = 0
         var_new = 0
+        var_old = self.var[x, y, z]
+        sdf_old = self.sdf[x, y, z]
+        p = var_new / (var_new + var_old)
+        q = 1 - p
+        self.sdf[x, y, z] = p * sdf_old + q * sdf_new
+        self.var[x, y, z] = p * var_old
+
+    def fuse_contact(self, T_contact_to_vol):
+        T_contact_to_vol = torch.FloatTensor(T_contact_to_vol).to(self.device)
+        R_vol_to_contact = T_contact_to_vol[:3, :3].T
+        t_vol_to_contact = - R_vol_to_contact @ T_contact_to_vol[:3, 3]
+
+        # find all voxel within the camera view
+        contact_coors = self.positions @ R_vol_to_contact.T + t_vol_to_contact
+        valid_mask = (
+                (abs(contact_coors[..., 0]-0) < 0.001)
+                * (abs(contact_coors[..., 1]-0) < 0.001)
+        ).bool()
+        voxel_coors = self.indices[valid_mask].long()
+        x, y, z = voxel_coors[:, 0], voxel_coors[:, 1], voxel_coors[:, 2]
+
+        # get truncated distance
+        volume_depth = contact_coors[x, y, z, 2]
+        surface_depth = 0
+        distance = surface_depth - volume_depth
+        dist_filter = (
+                (distance >= -self.truncate_margin)
+        ).bool()
+        x, y, z = x[dist_filter], y[dist_filter], z[dist_filter]
+        distance = distance[dist_filter]
+        sdf_new = torch.clamp_max(distance/self.truncate_margin, 1)
+        var_new = 0 * self.axial_noise_model(surface_depth) ** 2
+
+        # update volume
         var_old = self.var[x, y, z]
         sdf_old = self.sdf[x, y, z]
         p = var_new / (var_new + var_old)

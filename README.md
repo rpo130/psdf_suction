@@ -33,7 +33,7 @@
 - python3
   ```bash
   python3 -m pip install torch==1.2.0 # compatible with cuda https://pytorch.org/get-started/previous-versions/
-  python3 -m pip install scikit-image pycuda scipy
+  python3 -m pip install scikit-image==0.15.0 pycuda scipy
   ```
 
 ## 2. build PSDF-Suction 
