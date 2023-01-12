@@ -177,3 +177,38 @@ def get_point_cloud_from_depth_torch(depth, intr):
 def apply_spatial_transformation(vec : Union[np.ndarray, torch.Tensor], t : Union[np.ndarray, torch.Tensor]):
     vec_new = vec @ t[:3,:3].T + t[:3,3]
     return vec_new
+
+"""
+:depth: HxW
+:K: 相机内参
+"""
+def persp2ortho(depth2origin, K):
+    H, W = depth2origin.shape
+    i, j = np.meshgrid(np.arange(W, dtype=np.float32),np.arange(H, dtype=np.float32),
+                       indexing='xy')
+    #每一格偏移到中间
+    #(x,y,1)
+    dirs = np.stack([(i+0.5-K[0][2])/K[0][0],
+                     -(j+0.5-K[1][2])/K[1][1],
+                     -np.ones_like(i)],
+                    -1)
+    # depth2plane / 1 = depth2origin / norm((x,y,1))
+    depth2plane = depth2origin / np.linalg.norm(dirs, axis=-1)
+    return depth2plane
+
+
+"""
+:depth: HxW
+:K: 相机内参
+"""
+def ortho2persp(depth2plane, K):
+    H, W = depth2plane.shape
+    i, j = np.meshgrid(np.arange(W, dtype=np.float32),np.arange(H, dtype=np.float32),
+                       indexing='xy')
+    dirs = np.stack([(i+0.5-K[0][2])/K[0][0],
+                     -(j+0.5-K[1][2])/K[1][1],
+                     -np.ones_like(i)],
+                    -1)
+    # depth2plane / 1 = depth2origin / norm((x,y,1))
+    depth2origin = depth2plane * np.linalg.norm(dirs, axis=-1)
+    return depth2origin
