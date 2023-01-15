@@ -6,12 +6,16 @@ from scipy.spatial.transform import Rotation as R
 import numpy as np
 import os
 import json
+from realsense_commander import RealSenseCommander
 from matplotlib import pyplot as plt
 
 import os
 import numpy as np
 import json
 import matplotlib.pyplot as plt
+
+T_scene_to_world = np.eye(4)
+T_scene_to_world[:3, 3] = [0.46,0.05,0.03]
 
 def pose_to_transform_matrix(pose, T_cam_to_tool0):
     tool0_pose = pose
@@ -21,46 +25,18 @@ def pose_to_transform_matrix(pose, T_cam_to_tool0):
     T_cam_to_world = T_tool0_to_world @ T_cam_to_tool0
     return T_cam_to_world
 
-def gen_ur_pose(T_cam_to_world, T_cam_to_tool0):
+def transform_matrix_to_pose(T_cam_to_world, T_cam_to_tool0):
     T_tool0_to_cam = np.linalg.inv(T_cam_to_tool0)
     T_tool0_to_world = T_cam_to_world @ T_tool0_to_cam
     tool0_pose = [] + T_tool0_to_world[:3,3].tolist() + R.from_matrix(T_tool0_to_world[:3,:3]).as_quat().tolist()
     return tool0_pose
 
-def gen_ur_pose(T_):
+def transform_matrix_to_pose(T_):
     pose = [] + T_[:3,3].tolist() + R.from_matrix(T_[:3,:3]).as_quat().tolist()
     return pose
 
-def move_arm():
-    with open(os.path.join(os.path.dirname(__file__), "../config/cam_info_realsense.json"), 'r') as f:
-        cam_info = json.load(f)
-    cam_intr = np.array(cam_info["K"]).reshape(3, 3)
-    T_cam_to_tool0 = np.array(cam_info["cam_to_tool0"]).reshape(4, 4)
-    init_pose = config.init_position.tolist() + config.init_orientation.tolist()
-
-    # init arm control
-    arm = UR5Commander()
-    rospy.loginfo("Arm initialized")
-    arm.set_pose(init_pose, wait=True)
-    print("set init pose")
-
-
-    T_scene_to_world = np.eye(4)
-    t_scene_to_world = [0.4, 0.05, 0.03]
-    T_scene_to_world[:3, 3] = t_scene_to_world
-    T_world_to_scene = np.linalg.inv(T_scene_to_world)
-
-    #cam pose 
-    obs_pose = []
-    obs_pose.append(init_pose)
-
-    for i, p in enumerate(obs_pose):
-        arm.set_pose(p, wait=True)
-        print(i)
-        print(p)
-
 def display():
-    camera = get_camera()
+    camera = RealSenseCommander()
     camera.start()
     print("Camera initialized")
     fig = plt.figure()
@@ -71,58 +47,22 @@ def display():
         plt.imshow(color)
         plt.show()
 
-def move_and_get_image():
-    with open(os.path.join(os.path.dirname(__file__), "../config/cam_info_realsense.json"), 'r') as f:
-        cam_info = json.load(f)
+def move_and_get_image(cam_info, arm, camera):
     cam_intr = np.array(cam_info["K"]).reshape(3, 3)
     T_cam_to_tool0 = np.array(cam_info["cam_to_tool0"]).reshape(4, 4)
-    init_pose = config.init_position.tolist() + config.init_orientation.tolist()
-
-    # init arm control
-    arm = UR5Commander()
-    rospy.loginfo("Arm initialized")
-
-    camera = get_camera()
-    camera.start()
-    print("Camera initialized")
-
-    T_scene_to_world = np.eye(4)
-    t_scene_to_world = [0.4, 0.05, 0.03]
-    T_scene_to_world[:3, 3] = t_scene_to_world
-    T_world_to_scene = np.linalg.inv(T_scene_to_world)
 
     #cam pose 
-    obs_pose = []
-    obs_pose.append(init_pose)
-
-    #r1
-    pose = [0.4326047628305254, -0.27601854575585716, 0.31502277104938686, -0.6403355586700344, 0.6720988786089179, 0.250780903513018, 0.2745221450239749]
-    obs_pose.append(pose)
-    #r2
-    pose = [0.4312532598123046, -0.18189049230338578, 0.3598946475221223, -0.6653041189815552, 0.6934415638166361, 0.18048616670295264, 0.20960431881664293]
-    obs_pose.append(pose)
-    #u1
-    pose = [0.6505597570576372, 0.023491647897313533, 0.3535222526998132, 0.662462771381004, -0.690616082823764, -0.2200022862901425, 0.18918640729838418]
-    obs_pose.append(pose)
-    #l1
-    pose = [0.4851907067796292, 0.21611573307921111, 0.3947951168078107, 0.6711337567517277, -0.7033524657499528, 0.13911966930756467, 0.18846884910649842]
-    obs_pose.append(pose)
-    #l2
-    pose = [0.4640954809151032, 0.29668814559290013, 0.2763665256365443, 0.6433902761197504, -0.6818904466956321, 0.22407260964788708, 0.2662063802867397]
-    obs_pose.append(pose)
-    #b1
-    pose = [0.2939921356623896, 0.08324612624701633, 0.4019966841987688, -0.6597706741365947, 0.7273633243545239, -0.16364593286893767, 0.0941555127899283]
-    obs_pose.append(pose)
+    obs_pose = gen_scene_obs_pose(T_scene_to_world)
 
     imgs = []
     depths = []
     poses = []
     for i, p in enumerate(obs_pose):
-        arm.set_pose(p, wait=True)
-        print(f'{i} {p}')
+        arm.set_pose(transform_matrix_to_pose(p), wait=True)
+        print(f'{i}')
         color, depth = camera.get_image()
-        print(f'color:{color}')
-        print(f'depth:{depth}')
+        # print(f'color:{color}')
+        # print(f'depth:{depth}')
         imgs.append(color)
         depths.append(depth)
         poses.append(pose_to_transform_matrix(arm.get_pose(), T_cam_to_tool0))
@@ -141,7 +81,8 @@ def gen_data(imgs,depths,poses,cam_intr):
     #fov in degree
     #angle in rad
     #https://www.intel.com/content/www/us/en/support/articles/000030385/emerging-technologies/intel-realsense-technology.html
-    tranforms['camera_angle_x'] = 0.9747124782401998
+    #d435i hfov = 69
+    tranforms['camera_angle_x'] = 69 / 180 * np.pi 
     frames = []
     tranforms['frames'] = frames
 
@@ -170,21 +111,19 @@ def gen_data(imgs,depths,poses,cam_intr):
     with open(os.path.join(basedir, "transforms.json"), "w") as outfile:
         outfile.write(json_object)
 
-def get_transform_from_rotation(rot):
-    t = np.eye(4)
-    t[:3, :3] = rot
-    return t
-
+"""
+    return cam_to_world
+"""
 def gen_scene_obs_pose(T_scene_to_world):
     obs_pose = []
-    for x_angle in np.linspace(-50,50,5):
-        for y_angle in np.linspace(0,60,5):
+    for x_angle in np.linspace(-40,40,3):
+        for y_angle in np.linspace(0,10,2):
             #镜头朝向桌面            
             T_cam_face_to_scene = np.eye(4) 
-            T_cam_face_to_scene[:3, :3] = R.from_euler("xyz", [-180, 0, 90], degrees=True).as_matrix()
+            T_cam_face_to_scene[:3, :3] = R.from_euler("xyz", [180, 0, -90], degrees=True).as_matrix()
             #相机位置升高
             T_trans_up_to_scene = np.eye(4)
-            T_trans_up_to_scene[2,3] = 0.5
+            T_trans_up_to_scene[2,3] = 0.4
             T_cam_face_to_scene = T_trans_up_to_scene @ T_cam_face_to_scene
             #新观察位置
             T_obs_to_scene = np.eye(4)
@@ -214,12 +153,31 @@ def visual_pose(ori, obs_pose):
     ax.set_zlabel('Z Label')
     plt.show()
 
-def get_camera():
-    pass
+def main():
+    with open(os.path.join(os.path.dirname(__file__), "../config/cam_info_realsense.json"), 'r') as f:
+        cam_info = json.load(f)
+    cam_intr = np.array(cam_info["K"]).reshape(3, 3)
+    T_cam_to_tool0 = np.array(cam_info["cam_to_tool0"]).reshape(4, 4)
+    init_pose = config.init_position.tolist() + config.init_orientation.tolist()
+
+    # init arm control
+    arm = UR5Commander()
+    print("Arm initialized")
+
+    camera = RealSenseCommander()
+    camera.start()
+    print("Camera initialized")
+    
+    arm.set_pose(init_pose, wait=True)
+    print('init pose')
+
+    move_and_get_image(cam_info, arm, camera)
+
+    arm.set_pose(init_pose, wait=True)
+    print('end pose')
 
 if __name__=="__main__":
-    move_and_get_image()
-
+    main()
 
 
 
