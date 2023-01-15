@@ -1,12 +1,12 @@
 import os
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-import rospy
 
 DEVICE = "cuda:0"
 EPSILON = 1e-6
 
 def getnamespace():
+   import rospy
    return rospy.get_namespace()
 
 class Config:
