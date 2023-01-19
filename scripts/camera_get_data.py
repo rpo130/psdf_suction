@@ -1,3 +1,4 @@
+from audioop import reverse
 from mimetypes import init
 from ur5_commander import UR5Commander
 import rospy
@@ -13,11 +14,14 @@ import os
 import numpy as np
 import json
 import matplotlib.pyplot as plt
+import time
 
+#场景坐标系原点，坐标系姿态和世界坐标系一致
 T_scene_to_world = np.eye(4)
-T_scene_to_world[:3, 3] = [0.46,0.05,0.03]
+T_scene_to_world[:3, 3] = [0.3,0.05,0.03]
 
-def pose_to_transform_matrix(pose, T_cam_to_tool0):
+
+def tool0_pose_to_cam_transform_matrix(pose, T_cam_to_tool0):
     tool0_pose = pose
     T_tool0_to_world = np.eye(4)
     T_tool0_to_world[:3, :3] = R.from_quat(tool0_pose[3:]).as_matrix()
@@ -25,15 +29,11 @@ def pose_to_transform_matrix(pose, T_cam_to_tool0):
     T_cam_to_world = T_tool0_to_world @ T_cam_to_tool0
     return T_cam_to_world
 
-def transform_matrix_to_pose(T_cam_to_world, T_cam_to_tool0):
+def cam_transform_matrix_to_tool0_pose(T_cam_to_world, T_cam_to_tool0):
     T_tool0_to_cam = np.linalg.inv(T_cam_to_tool0)
     T_tool0_to_world = T_cam_to_world @ T_tool0_to_cam
     tool0_pose = [] + T_tool0_to_world[:3,3].tolist() + R.from_matrix(T_tool0_to_world[:3,:3]).as_quat().tolist()
     return tool0_pose
-
-def transform_matrix_to_pose(T_):
-    pose = [] + T_[:3,3].tolist() + R.from_matrix(T_[:3,:3]).as_quat().tolist()
-    return pose
 
 def display():
     camera = RealSenseCommander()
@@ -52,23 +52,27 @@ def move_and_get_image(cam_info, arm, camera):
     T_cam_to_tool0 = np.array(cam_info["cam_to_tool0"]).reshape(4, 4)
 
     #cam pose 
-    obs_pose = gen_scene_obs_pose(T_scene_to_world)
+    obs_pose = gen_scene_obs_pose2(T_scene_to_world)
 
     imgs = []
     depths = []
     poses = []
-    for i, p in enumerate(obs_pose):
-        arm.set_pose(transform_matrix_to_pose(p), wait=True)
-        print(f'{i}')
+    for i, p_cam in enumerate(obs_pose):
+        #p is cam to world
+        arm.set_pose(cam_transform_matrix_to_tool0_pose(p_cam, T_cam_to_tool0), wait=True)
+        print(f'execute {i}')
+        #确保相机位置不变
+        time.sleep(2)
         color, depth = camera.get_image()
+        print(f'image {i}')
         # print(f'color:{color}')
         # print(f'depth:{depth}')
         imgs.append(color)
         depths.append(depth)
-        poses.append(pose_to_transform_matrix(arm.get_pose(), T_cam_to_tool0))
-    gen_data(imgs, depths, poses, cam_intr)
+        poses.append(tool0_pose_to_cam_transform_matrix(arm.get_pose(), T_cam_to_tool0))
+    gen_data_file(imgs, depths, poses, cam_intr)
 
-def gen_data(imgs,depths,poses,cam_intr):
+def gen_data_file(imgs,depths,poses,cam_intr):
     basedir = "avt_data"
     imagedir = 'images'
     npdir = 'np'
@@ -114,24 +118,34 @@ def gen_data(imgs,depths,poses,cam_intr):
 """
     return cam_to_world
 """
-def gen_scene_obs_pose(T_scene_to_world):
+def gen_scene_obs_pose2(T_scene_to_world):
     obs_pose = []
-    for x_angle in np.linspace(-40,40,3):
-        for y_angle in np.linspace(0,10,2):
+    reverse_move = False
+
+    # z_range = np.linspace(-60, 70, 14)
+    # y_range = np.linspace(0,50, 6)
+    z_range = np.linspace(-30, 30, 3)
+    y_range = np.linspace(0,10, 3)
+    for z_angle in z_range:
+        y_angle_list = y_range
+        if reverse_move:
+            y_angle_list = y_angle_list[::-1]
+        for y_angle in y_angle_list:
             #镜头朝向桌面            
             T_cam_face_to_scene = np.eye(4) 
             T_cam_face_to_scene[:3, :3] = R.from_euler("xyz", [180, 0, -90], degrees=True).as_matrix()
             #相机位置升高
             T_trans_up_to_scene = np.eye(4)
-            T_trans_up_to_scene[2,3] = 0.4
+            T_trans_up_to_scene[2,3] = 0.45
             T_cam_face_to_scene = T_trans_up_to_scene @ T_cam_face_to_scene
             #新观察位置
             T_obs_to_scene = np.eye(4)
-            T_obs_to_scene[:3, :3] = R.from_euler("xyz", [x_angle, y_angle, 0], degrees=True).as_matrix()
+            T_obs_to_scene[:3, :3] = R.from_euler("xyz", [0, y_angle, z_angle], degrees=True).as_matrix()
             T_cam_face_to_scene = T_obs_to_scene @ T_cam_face_to_scene
             #转换为世界座标
             T_cam_face_to_world = T_scene_to_world @ T_cam_face_to_scene
             obs_pose.append(T_cam_face_to_world)
+        reverse_move = not reverse_move
     return obs_pose
 
 def visual_pose(ori, obs_pose):
@@ -153,11 +167,9 @@ def visual_pose(ori, obs_pose):
     ax.set_zlabel('Z Label')
     plt.show()
 
-def main():
+def gen_data():
     with open(os.path.join(os.path.dirname(__file__), "../config/cam_info_realsense.json"), 'r') as f:
         cam_info = json.load(f)
-    cam_intr = np.array(cam_info["K"]).reshape(3, 3)
-    T_cam_to_tool0 = np.array(cam_info["cam_to_tool0"]).reshape(4, 4)
     init_pose = config.init_position.tolist() + config.init_orientation.tolist()
 
     # init arm control
@@ -177,7 +189,4 @@ def main():
     print('end pose')
 
 if __name__=="__main__":
-    main()
-
-
-
+    gen_data()
