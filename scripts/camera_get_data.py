@@ -1,7 +1,6 @@
 from audioop import reverse
 from mimetypes import init
 from ur5_commander import UR5Commander
-import rospy
 from configs import config
 from scipy.spatial.transform import Rotation as R
 import numpy as np
@@ -20,20 +19,22 @@ import time
 T_scene_to_world = np.eye(4)
 T_scene_to_world[:3, 3] = [0.3,0.05,0.03]
 
+def quat_to_transform_matrix(quat):
+    T_ = np.eye(4)
+    T_[:3, :3] = R.from_quat(quat[3:]).as_matrix()
+    T_[:3, 3] = quat[:3]
+    return T_
 
-def tool0_pose_to_cam_transform_matrix(pose, T_cam_to_tool0):
-    tool0_pose = pose
-    T_tool0_to_world = np.eye(4)
-    T_tool0_to_world[:3, :3] = R.from_quat(tool0_pose[3:]).as_matrix()
-    T_tool0_to_world[:3, 3] = tool0_pose[:3]
+def tool0_pose_quat_to_cam_transform_matrix(tool0_pose_quat, T_cam_to_tool0):
+    T_tool0_to_world = quat_to_transform_matrix(tool0_pose_quat)
     T_cam_to_world = T_tool0_to_world @ T_cam_to_tool0
     return T_cam_to_world
 
-def cam_transform_matrix_to_tool0_pose(T_cam_to_world, T_cam_to_tool0):
+def cam_transform_matrix_to_tool0_pose_quat(T_cam_to_world, T_cam_to_tool0):
     T_tool0_to_cam = np.linalg.inv(T_cam_to_tool0)
     T_tool0_to_world = T_cam_to_world @ T_tool0_to_cam
-    tool0_pose = [] + T_tool0_to_world[:3,3].tolist() + R.from_matrix(T_tool0_to_world[:3,:3]).as_quat().tolist()
-    return tool0_pose
+    tool0_pose_quat = [] + T_tool0_to_world[:3,3].tolist() + R.from_matrix(T_tool0_to_world[:3,:3]).as_quat().tolist()
+    return tool0_pose_quat
 
 def display():
     camera = RealSenseCommander()
@@ -59,7 +60,7 @@ def move_and_get_image(cam_info, arm, camera):
     poses = []
     for i, p_cam in enumerate(obs_pose):
         #p is cam to world
-        arm.set_pose(cam_transform_matrix_to_tool0_pose(p_cam, T_cam_to_tool0), wait=True)
+        arm.set_pose(cam_transform_matrix_to_tool0_pose_quat(p_cam, T_cam_to_tool0), wait=True)
         print(f'execute {i}')
         #确保相机位置不变
         time.sleep(2)
@@ -69,7 +70,7 @@ def move_and_get_image(cam_info, arm, camera):
         # print(f'depth:{depth}')
         imgs.append(color)
         depths.append(depth)
-        poses.append(tool0_pose_to_cam_transform_matrix(arm.get_pose(), T_cam_to_tool0))
+        poses.append(tool0_pose_quat_to_cam_transform_matrix(arm.get_pose(), T_cam_to_tool0))
     gen_data_file(imgs, depths, poses, cam_intr)
 
 def gen_data_file(imgs,depths,poses,cam_intr):
