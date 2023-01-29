@@ -1,12 +1,8 @@
-from audioop import reverse
-from mimetypes import init
-from ur5_commander import UR5Commander
 from configs import config
 from scipy.spatial.transform import Rotation as R
 import numpy as np
 import os
 import json
-from realsense_commander import RealSenseCommander
 from matplotlib import pyplot as plt
 
 import os
@@ -37,6 +33,7 @@ def cam_transform_matrix_to_tool0_pose_quat(T_cam_to_world, T_cam_to_tool0):
     return tool0_pose_quat
 
 def display():
+    from realsense_commander import RealSenseCommander
     camera = RealSenseCommander()
     camera.start()
     print("Camera initialized")
@@ -66,8 +63,6 @@ def move_and_get_image(cam_info, arm, camera):
         time.sleep(2)
         color, depth = camera.get_image()
         print(f'image {i}')
-        # print(f'color:{color}')
-        # print(f'depth:{depth}')
         imgs.append(color)
         depths.append(depth)
         poses.append(tool0_pose_quat_to_cam_transform_matrix(arm.get_pose(), T_cam_to_tool0))
@@ -87,6 +82,7 @@ def gen_data_file(imgs,depths,poses,cam_intr):
     #angle in rad
     #https://www.intel.com/content/www/us/en/support/articles/000030385/emerging-technologies/intel-realsense-technology.html
     #d435i hfov = 69
+    #change in different resolution
     tranforms['camera_angle_x'] = 69 / 180 * np.pi 
     frames = []
     tranforms['frames'] = frames
@@ -139,6 +135,10 @@ def gen_scene_obs_pose2(T_scene_to_world):
             T_trans_up_to_scene = np.eye(4)
             T_trans_up_to_scene[2,3] = 0.45
             T_cam_face_to_scene = T_trans_up_to_scene @ T_cam_face_to_scene
+            #相片正视角
+            T_rotate = np.eye(4) 
+            T_rotate[:3, :3] = R.from_euler("xyz", [0, 0, 180], degrees=True).as_matrix()
+            T_cam_face_to_scene = T_rotate @ T_cam_face_to_scene
             #新观察位置
             T_obs_to_scene = np.eye(4)
             T_obs_to_scene[:3, :3] = R.from_euler("xyz", [0, y_angle, z_angle], degrees=True).as_matrix()
@@ -150,16 +150,16 @@ def gen_scene_obs_pose2(T_scene_to_world):
     return obs_pose
 
 def visual_pose(ori, obs_pose):
-    a = []
+    import pytransform3d.transformations as pt
+    import pytransform3d.camera as pc
+    import pytransform3d.plot_utils as pp
+    ax = pp.make_3d_axis(ax_s=1)
+    pt.plot_transform(ax)
     for p in obs_pose:
-        a.append(np.round(p @ np.array([0,0,0,1]), 3)[0:3])
-        print(a)
+        pt.plot_transform(ax, p, s=0.2)
 
-    a = np.array(a)
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
     ax.scatter(ori[0], ori[1], ori[1], marker='o')
-    ax.scatter(a[...,0], a[...,1], a[..., 2])
+
     ax.set_xlim(0, 1)
     ax.set_ylim(-0.7,0.7)
     ax.set_zlim(0,0.7)
@@ -174,9 +174,11 @@ def gen_data():
     init_pose = config.init_position.tolist() + config.init_orientation.tolist()
 
     # init arm control
+    from ur5_commander import UR5Commander
     arm = UR5Commander()
     print("Arm initialized")
 
+    from realsense_commander import RealSenseCommander
     camera = RealSenseCommander()
     camera.start()
     print("Camera initialized")
@@ -190,4 +192,5 @@ def gen_data():
     print('end pose')
 
 if __name__=="__main__":
-    gen_data()
+    visual_pose(T_scene_to_world[:3, 3], gen_scene_obs_pose2(T_scene_to_world))
+    # gen_data()
