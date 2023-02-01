@@ -3,7 +3,6 @@ import os
 import numpy as np
 import json
 from scipy.spatial.transform.rotation import Rotation as R
-from skimage import measure
 
 from psdf import PSDF
 from configs import config, DEVICE

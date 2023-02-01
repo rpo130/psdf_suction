@@ -2,7 +2,6 @@ from psdf import PSDF
 from configs import config
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 def test_fuse_point():
     psdf = PSDF(config.volume_shape, config.volume_resolution)
@@ -44,7 +43,7 @@ def test_fuse_depth():
 
     point_img = point_map[..., 2] - config.T_volume_to_world[2, 3] / config.volume_range[2]
 
-    v,f = psdf.get_point_cloud()
+    v,f = psdf.get_point_cloud(config.T_volume_to_world)
     o3d_display_point(v)
     mp_display_point(v)
 
