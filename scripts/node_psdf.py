@@ -1,111 +1,22 @@
 #!/usr/bin/python3
 import os
-from turtle import shape
-from dataclasses import fields
 import numpy as np
 import json
-from requests import head
-import torch
 from scipy.spatial.transform.rotation import Rotation as R
 from skimage import measure
-import cv2
-
-import rospy
-import rosparam
-import std_msgs.msg
-import sensor_msgs.msg
-import geometry_msgs.msg
-import message_filters
 
 from psdf import PSDF
 from configs import config, DEVICE
-
 import configs
 
-def compute_surface_normal(point_map):
-    # (250, 250, 3)
-    height, width, _ = point_map.shape
-    s = 1
-
-    # lower - upper
-    coor_up = torch.zeros_like(point_map).to(point_map.device)
-    coor_down = torch.zeros_like(point_map).to(point_map.device)
-    coor_up[s:height, ...] = point_map[0:height - s, ...]
-    coor_down[0:height - s, ...] = point_map[s:height, ...]
-    # i(x+1) - i(x-1)
-    dx = coor_down - coor_up
-
-    # right - left
-    coor_left = torch.zeros_like(point_map).to(point_map.device)
-    coor_right = torch.zeros_like(point_map).to(point_map.device)
-    coor_left[:, s:width, :] = point_map[:, 0:width - s, ...]
-    coor_right[:, 0:width - s, :] = point_map[:, s:width, ...]
-    dy = coor_right - coor_left
-
-    # normal
-    surface_normal = torch.cross(dx, dy, dim=-1)
-    #(250, 250)
-    norm_normal = torch.norm(surface_normal, dim=-1)
-    norm_mask = (norm_normal == 0)
-    surface_normal[norm_mask] = 0
-    surface_normal[~norm_mask] = surface_normal[~norm_mask] / norm_normal[~norm_mask][:, None]
-    return surface_normal
-
-"""
-    return : 
-        heightmap
-        heightmap-normal
-        heightmap-var
-        heightmap-color
-"""
-def flatten(psdf: PSDF, smooth=False, ksize=5, sigmaColor=0.1, sigmaSpace=5):
-
-    # find surface point
-    #(250,250,250)
-    surface_mask = psdf.sdf <= 0.01
-    # max in z direction
-    surface_mask_flat = torch.max(surface_mask, dim=-1)[0]
-
-    # get height map
-    z_vol = torch.zeros_like(psdf.sdf).long()
-    z_vol[surface_mask] = psdf.indices[surface_mask][:, 2]
-    z_flat = torch.max(z_vol, dim=-1)[0]
-    #(250,250)
-    height_map = psdf.positions[..., 2].take(z_flat)
-    if smooth:
-        height_map = cv2.bilateralFilter(height_map, ksize, sigmaColor, sigmaSpace)
-
-    # get point map
-    # (250,250,3)
-    point_map = psdf.positions[:, :, 0, :].clone()
-    point_map[..., 2] = height_map
-
-    # get normal map
-    normal_map = compute_surface_normal(point_map)
-
-    # get variance map
-    variances_map = psdf.var.take(z_flat)
-    variances_map[~surface_mask_flat] = 10
-
-    # get color map
-    color_map = psdf.rgb.take(z_flat)
-
-    # re-arrangement
-    # variances_map = torch.flip(variances_map, dims=[0,1])
-    # point_map = torch.flip(point_map, dims=[0,1])
-    # # normals = torch.flip(normals, dims=[0,1])
-    # color_map = torch.flip(color_map, dims=[0,1])
-
-    return (point_map.cpu().numpy(), 
-            normal_map.cpu().numpy(), 
-            variances_map.cpu().numpy(), 
-            color_map.cpu().numpy())
-
-def get_point_cloud(psdf):
-    verts, _, _, _ = measure.marching_cubes_lewiner(psdf.sdf.cpu().numpy(), 0)
-    return (verts * config.volume_resolution) @ config.T_volume_to_world[:3, :3].T + config.T_volume_to_world[:3, 3]
-
 def main():
+    import rospy
+    import rosparam
+    import std_msgs.msg
+    import sensor_msgs.msg
+    import geometry_msgs.msg
+    import message_filters
+
     rospy.init_node("psdf")
     rosnamespace = configs.getnamespace()
     show = rosparam.get_param(rospy.get_name() + "/show")
@@ -162,7 +73,7 @@ def main():
 
         # flatten to 2D point image
         ts = rospy.rostime.get_time()
-        point_map, normal_map, variance_map, _ = flatten(psdf)
+        point_map, normal_map, variance_map, _ = psdf.flatten()
         rospy.loginfo("flatten time %f"%(rospy.rostime.get_time()-ts))
 
         # publishing topic message
@@ -180,7 +91,7 @@ def main():
         if show:
             ts = rospy.rostime.get_time()
             # point cloud
-            point_cloud = get_point_cloud(psdf).astype(np.float32)
+            point_cloud = psdf.get_point_cloud(config.T_volume_to_world).astype(np.float32)
             point_size = point_cloud.dtype.itemsize * 3
             point_cloud_msg = sensor_msgs.msg.PointCloud2(
                 header=std_msgs.msg.Header(frame_id="base_link", stamp=rospy.Time.now()),

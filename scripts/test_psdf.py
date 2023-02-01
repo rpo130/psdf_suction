@@ -1,13 +1,15 @@
 from psdf import PSDF
 from configs import config
 import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 def test_fuse_point():
     psdf = PSDF(config.volume_shape, config.volume_resolution)
     psdf.fuse_point(np.array([0.0,-0.25,0.02]), config.T_world_to_volume)
     print(psdf.sdf == 0)
     print(np.where(psdf.sdf.cpu().numpy() == 0))
-    point_map = flatten(psdf)
+    point_map = psdf.flatten()
     point_img = point_map[..., 2] - config.T_volume_to_world[2, 3] / config.volume_range[2]
     import matplotlib.pyplot as plt
     plt.imshow(point_img)
@@ -20,7 +22,7 @@ def test_fuse_contact():
     print(T)
     psdf.fuse_contact(T)
     print(psdf.sdf[(psdf.sdf > -1e-1) * (psdf.sdf < 1e-1)])
-    point_map = flatten(psdf)
+    point_map = psdf.flatten()
     point_img = point_map[..., 2] - config.T_volume_to_world[2, 3] / config.volume_range[2]
     import matplotlib.pyplot as plt
     plt.imshow(point_img)
@@ -32,46 +34,19 @@ def test_fuse_depth():
     imgs, depths, poses, K = load_avt_data('/home/ai/codebase/nerf-pytorch/data/avt_data_glass_20230118_1/')
     # imgs, depths, poses, K = load_log()
 
-    for i in range(len(poses)):
+    for i in range(0,len(poses)):
       T_cam_to_world = poses[i]
       T_cam_to_volume = config.T_world_to_volume @ T_cam_to_world
       psdf.fuse(depths[i], K, T_cam_to_volume, imgs[i])
 
-    point_map, color_map = flatten(psdf)
+    point_map, color_map, *_ = psdf.flatten()
     point_map = point_map @ config.T_volume_to_world[:3, :3].T + config.T_volume_to_world[:3, 3]
 
     point_img = point_map[..., 2] - config.T_volume_to_world[2, 3] / config.volume_range[2]
-    import matplotlib.pyplot as plt
-    plt.imshow(point_img)
-    plt.colorbar()
-    plt.show()
 
-def flatten(psdf: PSDF, smooth=False, ksize=5, sigmaColor=0.1, sigmaSpace=5):
-    import torch
-    # find surface point
-    #(250,250,250)
-    surface_mask = psdf.sdf <= 0.01
-
-    # get height map
-    z_vol = torch.zeros_like(psdf.sdf).long()
-    z_vol[surface_mask] = psdf.indices[surface_mask][:, 2]
-    z_flat = torch.max(z_vol, dim=-1)[0]
-    #(250,250)
-    height_map = psdf.positions[..., 2].take(z_flat)
-    if smooth:
-        import cv2
-        height_map = cv2.bilateralFilter(height_map, ksize, sigmaColor, sigmaSpace)
-
-    # get point map
-    # (250,250,3)
-    point_map = psdf.positions[:, :, 0, :].clone()
-    point_map[..., 2] = height_map
-
-    # get color map
-    color_map = psdf.rgb.take(z_flat)
-
-    return (point_map.cpu().numpy(), 
-            color_map.cpu().numpy())
+    v,f = psdf.get_point_cloud()
+    o3d_display_point(v)
+    mp_display_point(v)
 
 import os,json
 import json
@@ -157,6 +132,30 @@ def load_log():
 
         break
   return imgs, depths, poses, K
+
+
+def mp_display_point(verts):
+  plt.style.use('_mpl-gallery')
+  fig = plt.figure()
+  ax = fig.add_subplot(111, projection='3d')
+  x,y,z = verts[...,0],verts[...,1],verts[...,2]
+  sample = 10
+  ax.scatter(x[::sample], y[::sample], z[::sample])
+
+  ax.set_xlabel('X Label')
+  ax.set_ylabel('Y Label')
+  ax.set_zlabel('Z Label')
+
+  plt.show()	
+
+def o3d_display_point(verts):
+  import open3d
+
+  pcd = open3d.geometry.PointCloud()
+
+  pcd.points = open3d.utility.Vector3dVector(verts)
+  mesh_frame = open3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+  open3d.visualization.draw_geometries([pcd, mesh_frame])
 
 if __name__ == "__main__":
     test_fuse_depth()

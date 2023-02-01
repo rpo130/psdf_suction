@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 
-
 class PSDF:
     def __init__(self, shape, resolution, device="cuda:0", with_color=False):
         self.shape = np.array(shape)
@@ -189,3 +188,89 @@ class PSDF:
         q = 1 - p
         self.sdf[x, y, z] = p * sdf_old + q * sdf_new
         self.var[x, y, z] = p * var_old
+
+    def get_point_cloud(self, T_volume_to_world=np.eye(4)):
+        from skimage import measure
+
+        verts, faces, _, _ = measure.marching_cubes_lewiner(self.sdf.cpu().numpy(), 0)
+        return (verts * self.resolution) @ T_volume_to_world[:3, :3].T + T_volume_to_world[:3, 3], faces
+    
+    """
+        return : 
+            heightmap
+            heightmap-normal
+            heightmap-var
+            heightmap-color
+    """
+    def flatten(self, smooth=False, ksize=5, sigmaColor=0.1, sigmaSpace=5):
+        psdf = self
+        # find surface point
+        #(250,250,250)
+        surface_mask = psdf.sdf <= 0.01
+        # max in z direction
+        surface_mask_flat = torch.max(surface_mask, dim=-1)[0]
+
+        # get height map
+        z_vol = torch.zeros_like(psdf.sdf).long()
+        z_vol[surface_mask] = psdf.indices[surface_mask][:, 2]
+        z_flat = torch.max(z_vol, dim=-1)[0]
+        #(250,250)
+        height_map = psdf.positions[..., 2].take(z_flat)
+        if smooth:
+            import cv2 as cv
+            height_map = cv.bilateralFilter(height_map, ksize, sigmaColor, sigmaSpace)
+
+        # get point map
+        # (250,250,3)
+        point_map = psdf.positions[:, :, 0, :].clone()
+        point_map[..., 2] = height_map
+
+        # get normal map
+        normal_map = compute_surface_normal(point_map)
+
+        # get variance map
+        variances_map = psdf.var.take(z_flat)
+        variances_map[~surface_mask_flat] = 10
+
+        # get color map
+        color_map = psdf.rgb.take(z_flat)
+
+        # re-arrangement
+        # variances_map = torch.flip(variances_map, dims=[0,1])
+        # point_map = torch.flip(point_map, dims=[0,1])
+        # # normals = torch.flip(normals, dims=[0,1])
+        # color_map = torch.flip(color_map, dims=[0,1])
+
+        return (point_map.cpu().numpy(), 
+                normal_map.cpu().numpy(), 
+                variances_map.cpu().numpy(), 
+                color_map.cpu().numpy())
+
+def compute_surface_normal(point_map):
+    # (250, 250, 3)
+    height, width, _ = point_map.shape
+    s = 1
+
+    # lower - upper
+    coor_up = torch.zeros_like(point_map).to(point_map.device)
+    coor_down = torch.zeros_like(point_map).to(point_map.device)
+    coor_up[s:height, ...] = point_map[0:height - s, ...]
+    coor_down[0:height - s, ...] = point_map[s:height, ...]
+    # i(x+1) - i(x-1)
+    dx = coor_down - coor_up
+
+    # right - left
+    coor_left = torch.zeros_like(point_map).to(point_map.device)
+    coor_right = torch.zeros_like(point_map).to(point_map.device)
+    coor_left[:, s:width, :] = point_map[:, 0:width - s, ...]
+    coor_right[:, 0:width - s, :] = point_map[:, s:width, ...]
+    dy = coor_right - coor_left
+
+    # normal
+    surface_normal = torch.cross(dx, dy, dim=-1)
+    #(250, 250)
+    norm_normal = torch.norm(surface_normal, dim=-1)
+    norm_mask = (norm_normal == 0)
+    surface_normal[norm_mask] = 0
+    surface_normal[~norm_mask] = surface_normal[~norm_mask] / norm_normal[~norm_mask][:, None]
+    return surface_normal
