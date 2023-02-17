@@ -3,17 +3,36 @@ import numpy as np
 from scipy.spatial.transform.rotation import Rotation as R
 import cv2
 
-import rospy
-import rosparam
-import sensor_msgs.msg
-import message_filters
-import psdf_suction.srv
+
 
 from analyser.vacuum_cup_analyser import VacuumCupAnalyser
 from configs import config, DEVICE, EPSILON
 
+
+def compute_score_inner(graspable_map, point_map, normal_map, position_pre):
+    # current first
+    dist_sigma = 0.05
+    dist_weight = np.exp(-0.5 * (((point_map - position_pre) ** 2).sum(axis=-1) / dist_sigma ** 2))
+    dist_weight = dist_weight / (dist_weight.sum() + EPSILON)
+
+    # upward first
+    normal_weight = normal_map[..., 2] + 1
+    normal_weight = normal_weight / (normal_weight.sum() + EPSILON)
+
+    # face center first
+    ksize = 21
+    range_weight = graspable_map * cv2.GaussianBlur(graspable_map, (ksize, ksize), 5)
+    range_weight = range_weight / (range_weight.sum() + EPSILON)
+
+
+    score = dist_weight * normal_weight * range_weight
+    return score
+
+
 def compute_score(graspable_map, point_map, normal_map, position_pre,
                     dist_weight_pub=None, normal_weight_pub=None, range_weight_pub=None):
+    import sensor_msgs.msg
+
     # current first
     dist_sigma = 0.05
     dist_weight = np.exp(-0.5 * (((point_map - position_pre) ** 2).sum(axis=-1) / dist_sigma ** 2))
@@ -46,6 +65,11 @@ def compute_score(graspable_map, point_map, normal_map, position_pre,
     return score
 
 def main():
+    import rospy
+    import rosparam
+    import sensor_msgs.msg
+    import message_filters
+    import psdf_suction.srv
     rospy.init_node("planner")
     show_grasp_point = rosparam.get_param(rospy.get_name() + "/show")
 

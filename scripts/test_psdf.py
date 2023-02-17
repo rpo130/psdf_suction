@@ -2,6 +2,8 @@ from psdf import PSDF
 from configs import config
 import numpy as np
 import matplotlib.pyplot as plt
+from analyser.vacuum_cup_analyser import VacuumCupAnalyser
+from node_planner import compute_score_inner
 
 def test_fuse_point():
     psdf = PSDF(config.volume_shape, config.volume_resolution)
@@ -156,5 +158,132 @@ def o3d_display_point(verts):
   mesh_frame = open3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
   open3d.visualization.draw_geometries([pcd, mesh_frame])
 
+DEVICE = "cpu"
+
+def test_grasp():
+    # init analyser
+    analyser = VacuumCupAnalyser(radius=config.gripper_radius,
+                                 height=config.gripper_height,
+                                 num_vertices=config.gripper_vertices,
+                                 angle_threshold=config.gripper_angle_threshold)
+    print("Analyser initialized")
+
+    psdf = PSDF(config.volume_shape, config.volume_resolution,
+                device=DEVICE, with_color=True)
+    print("PSDF initialized")
+
+
+    import cv2
+    # fpath = '/home/ai/codebase/instant-ngp/data/nerf/dex_nerf_simulated_wineglass_pose02/depth_dex/r_7.png'
+    fpath = '/home/ai/codebase/instant-ngp/data/nerf/dex_nerf_real_flask/depth_dex/14_Color.png'
+    depth = cv2.imread(fpath, cv2.IMREAD_ANYDEPTH)
+    depth = depth.astype(np.float32)
+    depth = depth / 1000
+
+    T_cam_to_world = np.array([
+        [
+          -0.35324800774031584,
+          -0.8585629231500284,
+          0.371598552801859,
+          0.2741426251726115
+        ],
+        [
+          0.9355296981475072,
+          -0.32415642513544335,
+          0.1403809636789037,
+          0.19120277121291676
+        ],
+        [
+          -6.941215028930547e-05,
+          0.39723079555540103,
+          0.9177185917385781,
+          0.5915793498273141
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ])
+
+    T_img_to_cam_face = np.eye(4)
+    T_img_to_cam_face[:3,:3] = R.from_euler("xyz", [180,0,0], degrees=True).as_matrix()
+    T_cam_to_world = T_cam_to_world @ T_img_to_cam_face 
+    print(T_cam_to_world)
+
+    T_cam_to_volume = config.T_world_to_volume @ T_cam_to_world
+
+
+    camera_angle_x = 1.2303659303290422 #0.6911112070083618
+    H,W = depth.shape
+    focal = .5 * W / np.tan(.5 * camera_angle_x)
+
+    K = np.array([
+        [focal, 0, 0.5*W],
+        [0, focal, 0.5*H],
+        [0, 0, 1]
+    ])
+
+    psdf.fuse(np.copy(depth), K, T_cam_to_volume, color=None)
+
+    o3d_display_point(psdf.get_point_cloud()[0])
+
+    # for i, p in enumerate(render_poses):
+    #     T_cam_to_world = p
+    #     T_cam_to_volume = config.T_world_to_volume @ T_cam_to_world
+    #     # fuse new data to psdf
+    #     psdf.fuse(np.copy(depths[i]), K, T_cam_to_volume, color=np.copy(colors[i]))
+
+    # flatten to 2D point image
+    point_map, normal_map, variance_map, _ = psdf.flatten(smooth=True)
+    point_map = point_map @ config.T_volume_to_world[:3,:3].T + config.T_volume_to_world[:3, 3]
+
+    # analysis
+    normal_mask = normal_map[..., 2] > np.cos(config.gripper_angle_threshold/180*np.pi)
+    variance_mask = variance_map < 1e-2
+    z_mask = point_map[:, :, 2] > -0.1
+    final_mask = normal_mask * variance_mask #* z_mask
+    obj_ids = np.where(final_mask != 0)
+    vision_dict = {"point_cloud": point_map,
+                    "normal": -normal_map}
+    graspable_map = analyser.analyse(vision_dict, obj_ids).astype(np.float32)
+
+    # update grasp pose
+    grasp_position = np.array([0,0,0])
+    score = compute_score_inner(graspable_map, point_map,
+                            normal_map, grasp_position)
+    idx = np.argmax(score)
+    i, j = idx // config.volume_shape[0], idx % config.volume_shape[1]
+    grasp_position = point_map[i, j]
+    grasp_normal = normal_map[i, j]
+
+    fig = plt.figure()
+    ax = fig.add_subplot(231)
+    ax.imshow(depth)
+    ax.set_title('input depth')
+
+    ax = fig.add_subplot(232)
+    ax.imshow(point_map[..., 2])
+    ax.set_title('height map')
+
+    ax = fig.add_subplot(233)
+    ax.imshow(graspable_map)
+    ax.set_title('grasp map')
+    
+    ax = fig.add_subplot(235)
+    ax.imshow(point_map[..., 2])
+    ax.scatter(i, j, s=50, c='red', marker='o')
+    ax.set_title('height map with point mark')
+
+    ax = fig.add_subplot(236)
+    ax.imshow(graspable_map)
+    ax.scatter(i, j, s=50, c='red', marker='o')
+    ax.set_title('grasp map with point mark')
+
+    print(f'grasp position {grasp_position}, normal {grasp_normal}')
+    plt.show()
+
 if __name__ == "__main__":
-    test_fuse_depth()
+    # test_fuse_depth()
+    test_grasp()
